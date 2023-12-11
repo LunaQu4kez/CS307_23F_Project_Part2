@@ -25,11 +25,11 @@
 
 ### 2.  Database Diagram by DataGrip
 
-![](../pic/database_diagram.png)
+![](pic/database_diagram.png)
 
 ### 3. Table Design Description
 
-We design **16** tables for this project, **10** of them are basic tables and others are help tables to increase efficiency. A brief description of each table is as follows.
+We design **12** tables for this project, **10** of them are basic tables and others are help tables to increase efficiency. A brief description of each table is as follows.
 
 **The 10 tables as below are basic tables.**
 
@@ -39,7 +39,7 @@ We design **16** tables for this project, **10** of them are basic tables and ot
 
 **follow**:  `up_mid` and `fans_mid` is the mid of follower and followee
 
-**video_info**: contains 11 columns (including `bv`, `title`, `duration`, `description`, `owner_mid`, `reviewer_mid`, `commit_time`, `review_time`, `public_time` and `can_see`) of information of a video
+**video_info**: contains 10 basic columns (including `bv`, `title`, `duration`, `description`, `owner_mid`, `reviewer_mid`, `commit_time`, `review_time`, `public_time`) and 6 help columns (including `like_cnt`, `coin_cnt`, `fav_cnt`, `view_cnt`, `view_time` and `can_see`) of information of a video
 
 **like_video**: 2 columns `mid` and `bv` is the mid and bv of the user and the video be liked, also has a constraint `primary key (bv, mid)`
 
@@ -49,15 +49,11 @@ We design **16** tables for this project, **10** of them are basic tables and ot
 
 **like_danmu**: records a user (with mid `mid`) liked a danmu (with id `danmu_id`)
 
-**The 6 tables as below are help tables mentioned above.**
+**The 2 tables as below are help tables mentioned above.**
 
 **max_id**: records the max value of `mid` exists now, in order to increase the efficiency of register a new user (we only need to use (`max_mid` + 1) to be the new user's mid)
 
 **max_bv**: records the max number after `"bv"` and its related `bv`, this table is used to add a new video fast
-
-**likev_cnt**: records the number of likes a video has
-
-**coinv_cnt**, **favv_cnt** and **viewv_cnt** has the same effect of **likev_cnt**, but **viewv_cnt** has an extra column `view_total_time` which records the total watch time of the video
 
 ### 4. Database Privilege
 
