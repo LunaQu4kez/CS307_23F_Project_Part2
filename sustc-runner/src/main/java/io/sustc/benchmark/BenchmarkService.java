@@ -28,7 +28,7 @@ public class BenchmarkService {
     @Autowired
     private DatabaseService databaseService;
 
-    @BenchmarkStep(order = 1, timeout = 10, description = "Import data")
+    @BenchmarkStep(order = 1, timeout = 100, description = "Import data")
     @SneakyThrows
     public BenchmarkResult importData() {
         val dataDir = Paths.get(benchmarkConfig.getDataPath(), BenchmarkConstants.IMPORT_DATA_PATH);

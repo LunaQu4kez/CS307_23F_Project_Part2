@@ -30,14 +30,13 @@ public class VideoServiceImpl implements VideoService {
                 return null;
             }
 
-            String dateStr = new Date().toString();
-            Timestamp ts = Timestamp.valueOf(dateStr);
+            Timestamp ts = new Timestamp(System.currentTimeMillis());
             if (req.getTitle() == null || req.getTitle().equals("") || req.getDuration() < 10
                 || ts.after(req.getPublicTime())) {
                 return null;
             }
-            String sql = "select * from video_info where title = ? and owner_mid = ?;";
-            PreparedStatement stmt = conn.prepareStatement(sql);
+            String sql1 = "select * from video_info where title = ? and owner_mid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
             stmt.setString(1, req.getTitle());
             stmt.setLong(2, auth.getMid());
             ResultSet rs = stmt.executeQuery();
@@ -47,24 +46,17 @@ public class VideoServiceImpl implements VideoService {
                 return null;
             }
 
-            sql = "select num from max_bv;";
-            stmt = conn.prepareStatement(sql);
+            String sql2 = "select count(*) from video_info";
+            stmt = conn.prepareStatement(sql2);
             rs = stmt.executeQuery();
             rs.next();
             long num = rs.getLong(1);
-            String bv = "bv" + (num + 1);
+            String bv = "BV" + (num + 1);
 
-            sql = "update max_bv set bv = ?, num = ? where num = ?";
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, bv);
-            stmt.setLong(2, num);
-            stmt.setLong(3, num + 1);
-            stmt.executeUpdate();
-            stmt.close();
 
-            sql = "insert into table video_info (bv, title, duration, description, owner_mid, commit_time, public_time) " +
+            String sql3 = "insert into video_info (bv, title, duration, description, owner_mid, commit_time, public_time) " +
                     "values (?,?,?,?,?,?,?)";
-            stmt = conn.prepareStatement(sql);
+            stmt = conn.prepareStatement(sql3);
             stmt.setString(1, bv);
             stmt.setString(2, req.getTitle());
             stmt.setFloat(3, req.getDuration());
@@ -74,31 +66,11 @@ public class VideoServiceImpl implements VideoService {
             stmt.setTimestamp(7, req.getPublicTime());
             stmt.executeUpdate();
 
-            sql = "insert into table likev_cnt (bv) values (?)";
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, bv);
-            stmt.executeUpdate();
-
-            sql = "insert into table coinv_cnt (bv) values (?)";
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, bv);
-            stmt.executeUpdate();
-
-            sql = "insert into table favv_cnt (bv) values (?)";
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, bv);
-            stmt.executeUpdate();
-
-            sql = "insert into table viewv_cnt (bv) values (?)";
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, bv);
-            stmt.executeUpdate();
-
             rs.close();
             stmt.close();
             return bv;
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
@@ -168,11 +140,31 @@ public class VideoServiceImpl implements VideoService {
             String qq = auth.getQq();
             String wechat = auth.getWechat();
 
-            // toDo: complete this method
-
+            if ((pw == null || pw.equals("")) &&
+                    (qq == null || qq.equals("")) &&
+                    (wechat == null || wechat.equals(""))) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+            if (pw != null && !pw.equals("") && !pw.equals(pw0)){
+                rs.close();
+                stmt.close();
+                return false;
+            }
+            if (qq != null && !qq.equals("") && !qq.equals(qq0)){
+                rs.close();
+                stmt.close();
+                return false;
+            }
+            if (wechat != null && !wechat.equals("") && !wechat.equals(wechat0)){
+                rs.close();
+                stmt.close();
+                return false;
+            }
             rs.close();
             stmt.close();
-            return false;
+            return true;
         } catch (Exception e) {
             System.out.println(e.getMessage());
             return false;
