@@ -1,5 +1,6 @@
 package io.sustc.service.impl;
 
+import com.opencsv.CSVReader;
 import io.sustc.dto.DanmuRecord;
 import io.sustc.dto.UserRecord;
 import io.sustc.dto.VideoRecord;
@@ -9,9 +10,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+import java.io.FileReader;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * It's important to mark your implementation class with {@link Service} annotation.
@@ -178,109 +184,113 @@ public class DatabaseServiceImpl implements DatabaseService {
             }
         }
 
-        String sql7 = "insert into like_video values(?,?)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql7)) {
-            long cnt = 0;
-            for (VideoRecord video : videoRecords) {
-                long[] follow = video.getLike();
-                String bv = video.getBv();
-                for (int i = 0; i < follow.length; i++) {
-                    stmt.setLong(1, follow[i]);
-                    stmt.setString(2, bv);
-                    stmt.addBatch();
-                    cnt++;
-                    if (cnt % BATCH_SIZE == 0) {
-                        stmt.executeBatch();
-                        stmt.clearBatch();
-                    }
-                }
-                if (cnt % BATCH_SIZE == 0) {
-                    stmt.executeBatch();
-                    stmt.clearBatch();
-                }
-            }
-            if (cnt % BATCH_SIZE != 0) {
-                stmt.executeBatch();
-                stmt.clearBatch();
-            }
-            conn.commit();
-        } catch (Exception e) {
-            e.printStackTrace();
-            try {
-                conn.rollback();
-            } catch (SQLException e2) {
-                e2.printStackTrace();
-            }
-        }
+//        String sql7 = "insert into like_video values(?,?)";
+//        try (PreparedStatement stmt = conn.prepareStatement(sql7)) {
+//            long cnt = 0;
+//            for (VideoRecord video : videoRecords) {
+//                long[] follow = video.getLike();
+//                String bv = video.getBv();
+//                for (int i = 0; i < follow.length; i++) {
+//                    stmt.setLong(1, follow[i]);
+//                    stmt.setString(2, bv);
+//                    stmt.addBatch();
+//                    cnt++;
+//                    if (cnt % BATCH_SIZE == 0) {
+//                        stmt.executeBatch();
+//                        stmt.clearBatch();
+//                    }
+//                }
+//                if (cnt % BATCH_SIZE == 0) {
+//                    stmt.executeBatch();
+//                    stmt.clearBatch();
+//                }
+//            }
+//            if (cnt % BATCH_SIZE != 0) {
+//                stmt.executeBatch();
+//                stmt.clearBatch();
+//            }
+//            conn.commit();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            try {
+//                conn.rollback();
+//            } catch (SQLException e2) {
+//                e2.printStackTrace();
+//            }
+//        }
+        insert("like_video", videoRecords);
 
-        String sql8 = "insert into coin_video values(?,?)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql8)) {
-            long cnt = 0;
-            for (VideoRecord video : videoRecords) {
-                long[] follow = video.getCoin();
-                String bv = video.getBv();
-                for (int i = 0; i < follow.length; i++) {
-                    stmt.setLong(1, follow[i]);
-                    stmt.setString(2, bv);
-                    stmt.addBatch();
-                    cnt++;
-                    if (cnt % BATCH_SIZE == 0) {
-                        stmt.executeBatch();
-                        stmt.clearBatch();
-                    }
-                }
-                if (cnt % BATCH_SIZE == 0) {
-                    stmt.executeBatch();
-                    stmt.clearBatch();
-                }
-            }
-            if (cnt % BATCH_SIZE != 0) {
-                stmt.executeBatch();
-                stmt.clearBatch();
-            }
-            conn.commit();
-        } catch (Exception e) {
-            e.printStackTrace();
-            try {
-                conn.rollback();
-            } catch (SQLException e2) {
-                e2.printStackTrace();
-            }
-        }
-        String sql9 = "insert into fav_video values(?,?)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql9)) {
-            long cnt = 0;
-            for (VideoRecord video : videoRecords) {
-                long[] follow = video.getFavorite();
-                String bv = video.getBv();
-                for (int i = 0; i < follow.length; i++) {
-                    stmt.setLong(1, follow[i]);
-                    stmt.setString(2, bv);
-                    stmt.addBatch();
-                    cnt++;
-                    if (cnt % BATCH_SIZE == 0) {
-                        stmt.executeBatch();
-                        stmt.clearBatch();
-                    }
-                }
-                if (cnt % BATCH_SIZE == 0) {
-                    stmt.executeBatch();
-                    stmt.clearBatch();
-                }
-            }
-            if (cnt % BATCH_SIZE != 0) {
-                stmt.executeBatch();
-                stmt.clearBatch();
-            }
-            conn.commit();
-        } catch (Exception e) {
-            e.printStackTrace();
-            try {
-                conn.rollback();
-            } catch (SQLException e2) {
-                e2.printStackTrace();
-            }
-        }
+//        String sql8 = "insert into coin_video values(?,?)";
+//        try (PreparedStatement stmt = conn.prepareStatement(sql8)) {
+//            long cnt = 0;
+//            for (VideoRecord video : videoRecords) {
+//                long[] follow = video.getCoin();
+//                String bv = video.getBv();
+//                for (int i = 0; i < follow.length; i++) {
+//                    stmt.setLong(1, follow[i]);
+//                    stmt.setString(2, bv);
+//                    stmt.addBatch();
+//                    cnt++;
+//                    if (cnt % BATCH_SIZE == 0) {
+//                        stmt.executeBatch();
+//                        stmt.clearBatch();
+//                    }
+//                }
+//                if (cnt % BATCH_SIZE == 0) {
+//                    stmt.executeBatch();
+//                    stmt.clearBatch();
+//                }
+//            }
+//            if (cnt % BATCH_SIZE != 0) {
+//                stmt.executeBatch();
+//                stmt.clearBatch();
+//            }
+//            conn.commit();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            try {
+//                conn.rollback();
+//            } catch (SQLException e2) {
+//                e2.printStackTrace();
+//            }
+//        }
+        insert("coin_video", videoRecords);
+
+//        String sql9 = "insert into fav_video values(?,?)";
+//        try (PreparedStatement stmt = conn.prepareStatement(sql9)) {
+//            long cnt = 0;
+//            for (VideoRecord video : videoRecords) {
+//                long[] follow = video.getFavorite();
+//                String bv = video.getBv();
+//                for (int i = 0; i < follow.length; i++) {
+//                    stmt.setLong(1, follow[i]);
+//                    stmt.setString(2, bv);
+//                    stmt.addBatch();
+//                    cnt++;
+//                    if (cnt % BATCH_SIZE == 0) {
+//                        stmt.executeBatch();
+//                        stmt.clearBatch();
+//                    }
+//                }
+//                if (cnt % BATCH_SIZE == 0) {
+//                    stmt.executeBatch();
+//                    stmt.clearBatch();
+//                }
+//            }
+//            if (cnt % BATCH_SIZE != 0) {
+//                stmt.executeBatch();
+//                stmt.clearBatch();
+//            }
+//            conn.commit();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            try {
+//                conn.rollback();
+//            } catch (SQLException e2) {
+//                e2.printStackTrace();
+//            }
+//        }
+        insert("fav_video", videoRecords);
 
         String sql10 = "insert into view_video values(?,?,?)";
         try (PreparedStatement stmt = conn.prepareStatement(sql10)) {
@@ -390,6 +400,99 @@ public class DatabaseServiceImpl implements DatabaseService {
             conn.close();
         }catch (SQLException e){
             e.printStackTrace();
+        }
+    }
+
+    private class AThread extends Thread {
+        String table_name;
+        List<String> bvs;
+        List<long[]> mids;
+
+        public AThread(String table_name, List<String> bvs, List<long[]> mids) {
+            this.table_name = table_name;
+            this.bvs = bvs;
+            this.mids = mids;
+        }
+
+        @Override
+        public void run() {
+            Connection conn = null;
+            PreparedStatement stmt = null;
+            try {
+                conn = dataSource.getConnection();
+                conn.setAutoCommit(false);
+                String sql = "insert into " + table_name + " values (?, ?)";
+                stmt = conn.prepareStatement(sql);
+                for (int k = 0; k < bvs.size(); k++) {
+                    String bv = bvs.get(k);
+                    long[] mid = mids.get(k);
+                    stmt.setString(2, bv);
+                    for (int i = 0; i < mid.length; i += BATCH_SIZE) {
+                        for (int j = 0; j < Math.min(BATCH_SIZE, mid.length - i); j++) {
+                            stmt.setLong(1, mid[i + j]);
+                            stmt.addBatch();
+                        }
+                        stmt.executeBatch();
+                        stmt.clearBatch();
+                    }
+                }
+                conn.commit();
+                stmt.close();
+                conn.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+                try {
+                    if (stmt != null)
+                        stmt.close();
+                    if (conn != null)
+                        conn.close();
+                } catch (SQLException e1) {
+                    e1.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void insert(String table, List<VideoRecord> dataList) {
+        int nThread = Math.min((int)Math.sqrt(dataList.size()), 8);
+        ExecutorService executorService = Executors.newFixedThreadPool(nThread);
+        try {
+            int dealData = 0;
+            int ONE_THREAD_DEAL = dataList.size() / nThread + 1;
+            int threads = 0;
+            List<String> bvs = new ArrayList<>();
+            List<long[]> mids = new ArrayList<>();
+            for (int k = 0; k < dataList.size(); k++) {
+                String bv = dataList.get(k).getBv();
+                long[] mid;
+                if (table.equals("like_video"))
+                    mid = dataList.get(k).getLike();
+                else if (table.equals("coin_video"))
+                    mid = dataList.get(k).getCoin();
+                else
+                    mid = dataList.get(k).getFavorite();
+                bvs.add(bv);
+                mids.add(mid);
+                dealData++;
+                if (dealData % ONE_THREAD_DEAL == 0) {
+                    AThread a = new AThread(table, bvs, mids);
+                    executorService.execute(a);
+                    System.out.println(++threads);
+                    bvs = new ArrayList<>();
+                    mids = new ArrayList<>();
+                }
+            }
+            AThread a = new AThread(table, bvs, mids);
+            executorService.execute(a);
+            executorService.shutdown();
+            try {
+                executorService.awaitTermination(10, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            executorService.shutdown();
         }
     }
 
