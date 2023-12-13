@@ -25,11 +25,11 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public String postVideo(AuthInfo auth, PostVideoReq req) {
-        try (Connection conn = dataSource.getConnection()) {
-            if (!authentication(auth, conn)) {
-                return null;
-            }
+        if (!Authentication.authentication(auth, dataSource)) {
+            return null;
+        }
 
+        try (Connection conn = dataSource.getConnection()) {
             Timestamp ts = new Timestamp(System.currentTimeMillis());
             if (req.getTitle() == null || req.getTitle().equals("") || req.getDuration() < 10
                 || ts.after(req.getPublicTime())) {
@@ -77,7 +77,43 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        return false;
+        if (!Authentication.authentication(auth, dataSource)) {
+            return false;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select owner_mid from video_info where bv = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setString(1, bv);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+            long owner_mid = rs.getLong(1);
+            stmt.close();
+            rs.close();
+
+            String sql2 = "select identity from user_info where mid = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setLong(1, auth.getMid());
+            rs = stmt.executeQuery();
+            rs.next();
+            String identity = rs.getString(1);
+            if (!identity.equals("superuser") && owner_mid != auth.getMid()) {
+                stmt.close();
+                rs.close();
+                return false;
+            }
+
+            String sql3 = "delete from video_info where bv = ?";
+            stmt = conn.prepareStatement(sql3);
+            stmt.setString(1, bv);
+            return stmt.executeUpdate() != 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     @Override
@@ -120,54 +156,4 @@ public class VideoServiceImpl implements VideoService {
         return false;
     }
 
-    private boolean authentication(AuthInfo auth, Connection conn) {
-        try {
-            String sql = "select password, qq, wechat from user_auth where mid = ?";
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setLong(1, auth.getMid());
-            ResultSet rs = stmt.executeQuery();
-            if (!rs.next()) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            // true info
-            String pw0 = rs.getString(1);
-            String qq0 = rs.getString(2);
-            String wechat0 = rs.getString(3);
-            // auth info
-            String pw = auth.getPassword();
-            String qq = auth.getQq();
-            String wechat = auth.getWechat();
-
-            if ((pw == null || pw.equals("")) &&
-                    (qq == null || qq.equals("")) &&
-                    (wechat == null || wechat.equals(""))) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            if (pw != null && !pw.equals("") && !pw.equals(pw0)){
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            if (qq != null && !qq.equals("") && !qq.equals(qq0)){
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            if (wechat != null && !wechat.equals("") && !wechat.equals(wechat0)){
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            rs.close();
-            stmt.close();
-            return true;
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-            return false;
-        }
-    }
 }
