@@ -9,6 +9,10 @@ import java.sql.ResultSet;
 
 public class Authentication {
     private static final boolean USE_HASH = false;
+    public static final long[] BASE = {1, 257, 66049, 197425, 406721, 718570, 123642, 318804, 143934, 290983, 333948, 890223, 198397, 656525, 955245, 131883, 339595, 244356, 933685, 882401};
+    public static final long MOD_A = 1048573;
+    public static final long MOD_B = 4194319;
+
 
     public static boolean authentication(AuthInfo auth, DataSource dataSource) {
         try (Connection conn = dataSource.getConnection()) {
@@ -39,17 +43,17 @@ public class Authentication {
                 return false;
             }
 
-            if (pw != null && !pw.equals("") && !hash(pw, mid).equals(pw0)){
+            if (pw != null && !pw.equals("") && !hash(pw, mid).equals(pw0)) {
                 rs.close();
                 stmt.close();
                 return false;
             }
-            if (qq != null && !qq.equals("") && !hash(qq, mid).equals(qq0)){
+            if (qq != null && !qq.equals("") && qq.equals(qq0)) {
                 rs.close();
                 stmt.close();
                 return false;
             }
-            if (wechat != null && !wechat.equals("") && !hash(wechat, mid).equals(wechat0)){
+            if (wechat != null && !wechat.equals("") && wechat.equals(wechat0)) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -64,10 +68,9 @@ public class Authentication {
     }
 
     public static String hash(String str, long mid) {
-        if (!USE_HASH) {
-            return str;
-        } else {
-            return str;
-        }
+        if (!USE_HASH) return str;
+        long result = str.charAt(0);
+        for (int i = 1; i < str.length(); i++) result = (str.charAt(i) * BASE[i] % MOD_A + result) % MOD_A;
+        return Long.toString(Long.parseLong(result +Long.toString(mid % MOD_A)) % MOD_B);
     }
 }

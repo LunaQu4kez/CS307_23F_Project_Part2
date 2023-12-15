@@ -40,7 +40,7 @@ public class UserServiceImpl implements UserService {
             stmt.setString(1, req.getQq());
             stmt.setString(2, req.getWechat());
             ResultSet rs = stmt.executeQuery();
-            if (!rs.next()){
+            if (rs.next()){
                 stmt.close();
                 rs.close();
                 return -1;
@@ -49,31 +49,38 @@ public class UserServiceImpl implements UserService {
             String sql3 = "select * from max_mid ";
             stmt = conn.prepareStatement(sql3);
             rs = stmt.executeQuery();
+            rs.next();
             long new_mid = rs.getLong(1) + 1;
 
-            String sql4 = "update max_mid set max_mid = ?";
-            stmt = conn.prepareStatement(sql4);
+            String sql6 = "insert into user_info (mid, name, sex, birthday, level, sign, identity) "
+                    + "values(?,?,?,?,?,?,?)";
+            stmt = conn.prepareStatement(sql6);
             stmt.setLong(1, new_mid);
+            stmt.setString(2, req.getName());
+            if (req.getSex() == RegisterUserReq.Gender.MALE) {
+                stmt.setString(3, "男");
+            } else if (req.getSex() == RegisterUserReq.Gender.FEMALE) {
+                stmt.setString(3, "女");
+            } else {
+                stmt.setString(3, "保密");
+            }
+            stmt.setString(4, req.getBirthday());
+            stmt.setInt(5, 0);
+            stmt.setString(6, req.getSign());
+            stmt.setString(7, "user");
             stmt.executeUpdate();
 
             String sql5 = "insert into user_auth (mid, password, qq, wechat) " + "values(?,?,?,?)";
             stmt = conn.prepareStatement(sql5);
             stmt.setLong(1, new_mid);
-            stmt.setString(2, req.getPassword());
+            stmt.setString(2, Authentication.hash(req.getPassword(), new_mid));
             stmt.setString(3, req.getQq());
             stmt.setString(4,req.getWechat());
             stmt.executeUpdate();
 
-            String sql6 = "insert into user_info (mid, name, sex, birthday, level, sign, identity) "
-                    + "values(?,?,?,?,?,?)";
-            stmt = conn.prepareStatement(sql6);
+            String sql4 = "update max_mid set max_mid = ?";
+            stmt = conn.prepareStatement(sql4);
             stmt.setLong(1, new_mid);
-            stmt.setString(2, req.getName());
-            stmt.setObject(3, req.getSex());
-            stmt.setString(4, req.getBirthday());
-            stmt.setInt(5, 0);
-            stmt.setString(6, req.getSign());
-            stmt.setString(7, "user");
             stmt.executeUpdate();
 
             stmt.close();
@@ -121,25 +128,34 @@ public class UserServiceImpl implements UserService {
             stmt = conn.prepareStatement(sql2);
             stmt.setLong(1, mid);
             rs = stmt.executeQuery();
+            rs.next();
             String DeleIden = rs.getString(1);
 
             String sql3 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql3);
             stmt.setLong(1, auth.getMid());
             rs = stmt.executeQuery();
+            rs.next();
             String AuthIden = rs.getString(1);
 
-            rs.close();
-            stmt.close();
-
-            if (AuthIden.equals("user") &&
-                    mid != auth.getMid()){
+            if (AuthIden.equals("user") && mid != auth.getMid()){
+                rs.close();
+                stmt.close();
                 return false;
             }
             if (AuthIden.equals("superuser") && !DeleIden.equals("user") && mid != auth.getMid()){
+                rs.close();
+                stmt.close();
                 return false;
             }
-            return true;
+
+            String sql4 = "delete from user_info where mid = ?";
+            stmt = conn.prepareStatement(sql4);
+            stmt.setLong(1, mid);
+            int x = stmt.executeUpdate();
+            rs.close();
+            stmt.close();
+            return x != 0;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
@@ -265,7 +281,7 @@ public class UserServiceImpl implements UserService {
             List<String> data6 = new ArrayList<>();
             String sql7 = "select bv from video_info where owner_mid = ?";
             stmt = conn.prepareStatement(sql7);
-            stmt.setLong(5, mid);
+            stmt.setLong(1, mid);
             rs = stmt.executeQuery();
             while (rs.next()){
                 String data = rs.getString(1);
