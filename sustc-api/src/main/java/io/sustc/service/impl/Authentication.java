@@ -73,9 +73,6 @@ public class Authentication {
         for (int i = 1; i < str.length(); i++) {
             result = (str.charAt(i) * BASE[i] % MOD_A + result) % MOD_A;
         }
-        long newMid = mid % MOD_A;
-        String newStr = Long.toString(Long.parseLong(result +Long.toString(newMid)) % MOD_B);
-        System.out.println(newStr);
-        return str;
+        return Long.toString(Long.parseLong(result +Long.toString(mid % MOD_A)) % MOD_B);
     }
 }
