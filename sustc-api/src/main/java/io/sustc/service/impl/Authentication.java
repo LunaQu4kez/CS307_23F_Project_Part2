@@ -44,12 +44,12 @@ public class Authentication {
                 stmt.close();
                 return false;
             }
-            if (qq != null && !qq.equals("") && !hash(qq, mid).equals(qq0)){
+            if (qq != null && !qq.equals("") && qq.equals(qq0)){
                 rs.close();
                 stmt.close();
                 return false;
             }
-            if (wechat != null && !wechat.equals("") && !hash(wechat, mid).equals(wechat0)){
+            if (wechat != null && !wechat.equals("") && wechat.equals(wechat0)){
                 rs.close();
                 stmt.close();
                 return false;

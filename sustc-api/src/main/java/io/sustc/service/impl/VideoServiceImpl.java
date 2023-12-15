@@ -12,10 +12,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -119,27 +116,281 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
-        return false;
+        if (!Authentication.authentication(auth, dataSource)) {
+            return false;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select owner_mid, title, description, duration, public_time from video_info where bv = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setString(1, bv);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+            long ownerMid = rs.getLong(1);
+            String title = rs.getString(2);
+            String description = rs.getString(3);
+            double duration = rs.getDouble(4);
+            Timestamp publicTime = rs.getTimestamp(5);
+            if (ownerMid != auth.getMid()) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+            Timestamp now = new Timestamp(System.currentTimeMillis());
+            if (req.getTitle() == null || req.getTitle().equals("") || req.getDuration() < 10
+                    || now.after(req.getPublicTime())) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+            if ((duration != req.getDuration()) || (title.equals(req.getTitle()) &&
+                    description.equals(req.getDescription()) && duration == req.getDuration()
+                    && publicTime.equals(req.getPublicTime()))) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+            String sql2 = "update video_info set title = ?, description = ?, public_time = ?, " +
+                    "can_see = false where bv = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setString(1, req.getTitle());
+            stmt.setString(2, req.getDescription());
+            if (!now.after(req.getPublicTime()))
+                stmt.setTimestamp(3, req.getPublicTime());
+            stmt.setString(4, bv);
+            int x = stmt.executeUpdate();
+            stmt.close();
+            return x != 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     @Override
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
-        return null;
+        if (!Authentication.authentication(auth, dataSource)) {
+            return null;
+        }
+        if (keywords == null || keywords.equals("") || pageSize <= 0 || pageNum <= 0) {
+            return null;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            List<String> bvs = new ArrayList<>();
+            Map<String, Integer> match = new HashMap<>();
+            Map<String, Integer> watch = new HashMap<>();
+            Timestamp now = new Timestamp(System.currentTimeMillis());
+
+            String sql0 = "select identity from user_info where mid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql0);
+            stmt.setLong(1, auth.getMid());
+            ResultSet rs = stmt.executeQuery();
+            rs.next();
+            String identity = rs.getString(1);
+
+            String sql1 = "select bv, title, description, name, can_see, public_time " +
+                    "from video_info join user_info on mid = owner_mid";
+            stmt = conn.prepareStatement(sql1);
+            rs = stmt.executeQuery();
+            while (rs.next()) {
+                String bv = rs.getString(1);
+                String title = rs.getString(2);
+                String description = rs.getString(3);
+                String name = rs.getString(4);
+                boolean canSee = rs.getBoolean(5);
+                Timestamp publicTime = rs.getTimestamp(6);
+                if (identity.equals("user") && (!canSee || now.before(publicTime))) {
+                    continue;
+                }
+                String[] words = keywords.split(" ");
+                int cnt = 0;
+                for (int i = 0; i < words.length; i++) {
+                    if (title.contains(words[i])) cnt++;
+                    if (description.contains(words[i])) cnt++;
+                    if (name.contains(words[i])) cnt++;
+                }
+                match.put(bv, cnt);
+                bvs.add(bv);
+            }
+
+            String sql2 = "select bv, count(mid) from view_video group by bv";
+            stmt = conn.prepareStatement(sql2);
+            rs = stmt.executeQuery();
+            while (rs.next()) {
+                String bv = rs.getString(1);
+                int cnt = rs.getInt(2);
+                watch.put(bv, cnt);
+            }
+
+            rs.close();
+            stmt.close();
+
+            bvs.sort(new Comparator<String>() {
+                @Override
+                public int compare(String o1, String o2) {
+                    if (!Objects.equals(match.get(o1), match.get(o2)))
+                        return -match.get(o1) + match.get(o2);
+                    else return -watch.getOrDefault(o1, 0) + watch.getOrDefault(o2, 0);
+                }
+            });
+
+            List<String> ans = new ArrayList<>();
+            for (int i = (pageNum - 1) * pageSize; i < Math.min(pageNum * pageSize, bvs.size()); i++) {
+                ans.add(bvs.get(i));
+            }
+            return ans;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     @Override
     public double getAverageViewRate(String bv) {
-        return 0;
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select duration from video_info where bv = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setString(1, bv);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()) {
+                rs.close();
+                stmt.close();
+                return -1;
+            }
+            double duration = rs.getDouble(1);
+
+            String sql2 = "select count(*) from view_video where bv = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setString(1, bv);
+            rs = stmt.executeQuery();
+            rs.next();
+            int cnt = rs.getInt(1);
+            if (cnt == 0) {
+                rs.close();
+                stmt.close();
+                return -1;
+            }
+
+            String sql3 = "select time from view_video where bv = ?";
+            stmt = conn.prepareStatement(sql3);
+            stmt.setString(1, bv);
+            rs = stmt.executeQuery();
+            double totalViewRate = 0;
+            while (rs.next()) {
+                totalViewRate += rs.getDouble(1) / duration;
+            }
+            rs.close();
+            stmt.close();
+            return totalViewRate / cnt;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return -1;
+        }
     }
 
     @Override
     public Set<Integer> getHotspot(String bv) {
-        return null;
+        Set<Integer> set = new HashSet<>();
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select duration from video_info where bv = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setString(1, bv);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()) {
+                rs.close();
+                stmt.close();
+                return set;
+            }
+            double duration = rs.getDouble(1);
+            System.out.println("duration = " + duration);
+
+            String sql2 = "select count(*) from danmu_info where bv = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setString(1, bv);
+            rs = stmt.executeQuery();
+            rs.next();
+            if (rs.getInt(1) == 0) {
+                rs.close();
+                stmt.close();
+                return set;
+            }
+
+            int[] cnt = new int[(int)(duration / 10) + 1];
+            int maxCnt = 0;
+            String sql3 = "select time from danmu_info where bv = ?";
+            stmt = conn.prepareStatement(sql3);
+            stmt.setString(1, bv);
+            rs = stmt.executeQuery();
+            while (rs.next()) {
+                double time = rs.getDouble(1);
+                cnt[(int)(time / 10)]++;
+                maxCnt = Math.max(maxCnt, cnt[(int)(time / 10)]);
+            }
+            for (int i = 0; i < cnt.length; i++) {
+                System.out.println("cnt[" + i + "] = " + cnt[i]);
+                if (cnt[i] == maxCnt) set.add(i);
+            }
+            return set;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return set;
+        }
     }
 
     @Override
     public boolean reviewVideo(AuthInfo auth, String bv) {
-        return false;
+        if (!Authentication.authentication(auth, dataSource)) {
+            return false;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select owner_mid, can_see from video_info where bv = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setString(1, bv);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+            long ownerMid = rs.getLong(1);
+            boolean canSee = rs.getBoolean(2);
+            if (ownerMid == auth.getMid() || canSee) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+            String sql2 = "select identity from user_info where mid = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setLong(1, auth.getMid());
+            rs = stmt.executeQuery();
+            rs.next();
+            String identity = rs.getString(1);
+            if (!identity.equals("superuser")) {
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+            String sql3 = "update video_info set reviewer_mid = ?, review_time = ?, can_see = true" +
+                    " where bv = ?";
+            stmt = conn.prepareStatement(sql3);
+            stmt.setLong(1, auth.getMid());
+            stmt.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
+            stmt.setString(3, bv);
+            int x = stmt.executeUpdate();
+            stmt.close();
+            return x != 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     @Override
