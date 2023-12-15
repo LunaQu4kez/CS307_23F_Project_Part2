@@ -70,9 +70,7 @@ public class Authentication {
     public static String hash(String str, long mid) {
         if (!USE_HASH) return str;
         long result = str.charAt(0);
-        for (int i = 1; i < str.length(); i++) {
-            result = (str.charAt(i) * BASE[i] % MOD_A + result) % MOD_A;
-        }
+        for (int i = 1; i < str.length(); i++) result = (str.charAt(i) * BASE[i] % MOD_A + result) % MOD_A;
         return Long.toString(Long.parseLong(result +Long.toString(mid % MOD_A)) % MOD_B);
     }
 }
