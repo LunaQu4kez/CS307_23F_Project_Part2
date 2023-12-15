@@ -8,10 +8,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
 public class Authentication {
-    private static final boolean USE_HASH = false;
+    private static final boolean USE_HASH = true;
     public static final long[] BASE = {1, 257, 66049, 197425, 406721, 718570, 123642, 318804, 143934, 290983, 333948, 890223, 198397, 656525, 955245, 131883, 339595, 244356, 933685, 882401};
     public static final long MOD_A = 1048573;
-    public static final long MOD_B = 4194319;
+    public static final long MOD_B = 2147483647;
 
 
     public static boolean authentication(AuthInfo auth, DataSource dataSource) {
@@ -48,12 +48,12 @@ public class Authentication {
                 stmt.close();
                 return false;
             }
-            if (qq != null && !qq.equals("") && qq.equals(qq0)) {
+            if (qq != null && !qq.equals("") && !qq.equals(qq0)) {
                 rs.close();
                 stmt.close();
                 return false;
             }
-            if (wechat != null && !wechat.equals("") && wechat.equals(wechat0)) {
+            if (wechat != null && !wechat.equals("") && !wechat.equals(wechat0)) {
                 rs.close();
                 stmt.close();
                 return false;
