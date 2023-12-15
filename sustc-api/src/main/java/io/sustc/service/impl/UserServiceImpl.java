@@ -9,6 +9,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @Slf4j
@@ -19,21 +25,260 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public long register(RegisterUserReq req) {
-        return 0;
+        try (Connection conn = dataSource.getConnection()) {
+            if (req.getPassword() == null || req.getName() == null || req.getSex() == null
+            || req.getPassword().equals("") || req.getName().equals("")){
+                return -1;
+            }
+            if (req.getBirthday() != null && !req.getBirthday().isEmpty() &&
+                    !req.getBirthday().matches("\\d{1,2}月\\d{1,2}日")){
+                return -1;
+            }
+
+            String sql2 = "select * from user_auth where qq = ? or wechat = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql2);
+            stmt.setString(1, req.getQq());
+            stmt.setString(2, req.getWechat());
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()){
+                stmt.close();
+                rs.close();
+                return -1;
+            }
+
+            String sql3 = "select * from max_mid ";
+            stmt = conn.prepareStatement(sql3);
+            rs = stmt.executeQuery();
+            long new_mid = rs.getLong(1) + 1;
+
+            String sql4 = "update max_mid set max_mid = ?";
+            stmt = conn.prepareStatement(sql4);
+            stmt.setLong(1, new_mid);
+            stmt.executeUpdate();
+
+            String sql5 = "insert into user_auth (mid, password, qq, wechat) " + "values(?,?,?,?)";
+            stmt = conn.prepareStatement(sql5);
+            stmt.setLong(1, new_mid);
+            stmt.setString(2, req.getPassword());
+            stmt.setString(3, req.getQq());
+            stmt.setString(4,req.getWechat());
+            stmt.executeUpdate();
+
+            String sql6 = "insert into user_info (mid, name, sex, birthday, level, sign, identity) "
+                    + "values(?,?,?,?,?,?)";
+            stmt = conn.prepareStatement(sql6);
+            stmt.setLong(1, new_mid);
+            stmt.setString(2, req.getName());
+            stmt.setObject(3, req.getSex());
+            stmt.setString(4, req.getBirthday());
+            stmt.setInt(5, 0);
+            stmt.setString(6, req.getSign());
+            stmt.setString(7, "user");
+            stmt.executeUpdate();
+
+            stmt.close();
+            rs.close();
+            return new_mid;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return -1;
+        }
     }
 
     @Override
     public boolean deleteAccount(AuthInfo auth, long mid) {
-        return false;
+        if (!Authentication.authentication(auth, dataSource)){
+            return false;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select * from user_auth where mid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setLong(1, mid);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()){
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+//            if (rs.getString(3) != null && rs.getString(4) != null &&
+//                    (!auth.getQq().equals(rs.getString(3))
+//                            || !auth.getWechat().equals(rs.getString(4)))){
+//                rs.close();
+//                stmt.close();
+//                return false;
+//            }
+//
+//            if (auth.getMid() == 0 &&
+//                    (auth.getQq() == null || auth.getQq().equals("")) &&
+//                    (auth.getWechat() == null || auth.getWechat().equals(""))) {
+//                rs.close();
+//                stmt.close();
+//                return false;
+//            }
+
+            String sql2 = "select identity from user_info where mid = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setLong(1, mid);
+            rs = stmt.executeQuery();
+            String DeleIden = rs.getString(1);
+
+            String sql3 = "select identity from user_info where mid = ?";
+            stmt = conn.prepareStatement(sql3);
+            stmt.setLong(1, auth.getMid());
+            rs = stmt.executeQuery();
+            String AuthIden = rs.getString(1);
+
+            rs.close();
+            stmt.close();
+
+            if (AuthIden.equals("user") &&
+                    mid != auth.getMid()){
+                return false;
+            }
+            if (AuthIden.equals("superuser") && !DeleIden.equals("user") && mid != auth.getMid()){
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     @Override
     public boolean follow(AuthInfo auth, long followeeMid) {
-        return false;
+        if (!Authentication.authentication(auth, dataSource)){
+            return false;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select * from user_auth where mid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setLong(1, followeeMid);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()){
+                rs.close();
+                stmt.close();
+                return false;
+            }
+
+            String sql2 = "select * from follow where up_mid = ? and fans_mid = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setLong(1, followeeMid);
+            stmt.setLong(2, auth.getMid());
+            rs = stmt.executeQuery();
+
+            if (!rs.next()){
+                String sql3 = "insert into follow (up_mid, fans_mid) values (?, ?)";
+                stmt = conn.prepareStatement(sql3);
+                stmt.setLong(1, followeeMid);
+                stmt.setLong(2, auth.getMid());
+                stmt.executeUpdate();
+                rs.close();
+                stmt.close();
+                return true;
+            }else {
+                String sql4 = "delete from follow where up_mid = ? and fans_mid = ?";
+                stmt = conn.prepareStatement(sql4);
+                stmt.setLong(1, followeeMid);
+                stmt.setLong(2, auth.getMid());
+                stmt.executeUpdate();
+                rs.close();
+                stmt.close();
+                return false;
+            }
+        }catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     @Override
     public UserInfoResp getUserInfo(long mid) {
-        return null;
+        try (Connection conn = dataSource.getConnection()) {
+            String sql1 = "select coin from user_info where mid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql1);
+            stmt.setLong(1, mid);
+            ResultSet rs = stmt.executeQuery();
+            if (!rs.next()){
+                rs.close();
+                stmt.close();
+                return null;
+            }
+            int coin = rs.getInt(1);
+
+            List<Long> data1 = new ArrayList<>();
+            String sql2 = "select up_mid from follow where fans_mid = ?";
+            stmt = conn.prepareStatement(sql2);
+            stmt.setLong(1, mid);
+            rs = stmt.executeQuery();
+            while (rs.next()){
+                long data = rs.getLong(1);
+                data1.add(data);
+            }
+            long[] following = data1.stream().mapToLong(Long::longValue).toArray();
+
+            List<Long> data2 = new ArrayList<>();
+            String sql3 = "select fans_mid from follow where up_mid = ?";
+            stmt = conn.prepareStatement(sql3);
+            stmt.setLong(1, mid);
+            rs = stmt.executeQuery();
+            while (rs.next()){
+                long data = rs.getLong(1);
+                data2.add(data);
+            }
+            long[] follower = data2.stream().mapToLong(Long::longValue).toArray();
+
+            List<String> data3 = new ArrayList<>();
+            String sql4 = "select bv from view_video where mid = ?";
+            stmt = conn.prepareStatement(sql4);
+            stmt.setLong(1, mid);
+            rs = stmt.executeQuery();
+            while (rs.next()){
+                String data = rs.getString(1);
+                data3.add(data);
+            }
+            String[] watched = data3.toArray(new String[0]);
+
+            List<String> data4 = new ArrayList<>();
+            String sql5 = "select bv from like_video where mid = ?";
+            stmt = conn.prepareStatement(sql5);
+            stmt.setLong(1, mid);
+            rs= stmt.executeQuery();
+            while (rs.next()){
+                String data = rs.getString(1);
+                data4.add(data);
+            }
+            String[] liked = data4.toArray(new String[0]);
+
+            List<String> data5 = new ArrayList<>();
+            String sql6 = "select bv from fav_video where mid = ?";
+            stmt = conn.prepareStatement(sql6);
+            stmt.setLong(1, mid);
+            rs = stmt.executeQuery();
+            while (rs.next()){
+                String data = rs.getString(1);
+                data5.add(data);
+            }
+            String[] collected = data5.toArray(new String[0]);
+
+            List<String> data6 = new ArrayList<>();
+            String sql7 = "select bv from video_info where owner_mid = ?";
+            stmt = conn.prepareStatement(sql7);
+            stmt.setLong(5, mid);
+            rs = stmt.executeQuery();
+            while (rs.next()){
+                String data = rs.getString(1);
+                data6.add(data);
+            }
+            String[] posted = data6.toArray(new String[0]);
+
+            rs.close();
+            stmt.close();
+            return new UserInfoResp(mid, coin, following, follower, watched, liked, collected, posted );
+        }catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }
