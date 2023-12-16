@@ -54,18 +54,23 @@ public class DanmuServiceImpl implements DanmuService {
             rs.close();
             stmt.close();
 
-            String sql3 = "insert into danmu_info (bv, mid, time, content, post_time) " + "values (?,?,?,?,?)";
+            String sql4 = "select count(danmu_id) from danmu_info";
+            stmt = conn.prepareStatement(sql4);
+            rs = stmt.executeQuery();
+            rs.next();
+            int cnt = rs.getInt(1);
+
+            String sql3 = "insert into danmu_info (danmu_id, bv, mid, time, content, post_time) " + "values (?,?,?,?,?,?)";
             PreparedStatement stmt1 = conn.prepareStatement(sql3, Statement.RETURN_GENERATED_KEYS);
-            stmt1.setString(1, bv);
-            stmt1.setLong(2, auth.getMid());
-            stmt1.setFloat(3, time);
-            stmt1.setString(4, content);
-            stmt1.setTimestamp(5, current);
-            stmt1.executeUpdate();
+            stmt1.setLong(1, cnt + 1);
+            stmt1.setString(2, bv);
+            stmt1.setLong(3, auth.getMid());
+            stmt1.setFloat(4, time);
+            stmt1.setString(5, content);
+            stmt1.setTimestamp(6, current);
             int result = stmt1.executeUpdate();
             stmt1.close();
-
-            return result;
+            return result > 0 ? (cnt + 1) : -1;
         }catch (Exception e) {
             e.printStackTrace();
             return -1;
@@ -114,7 +119,11 @@ public class DanmuServiceImpl implements DanmuService {
                 stmt.close();
                 return danmu;
             }else {
-                String sql3 = "select distinct on (content) * from danmu_info where bv = ? and time between ? and ? order by time asc";
+                String sql3 = "select danmu_id from danmu_info d join (\n" +
+                        "select content, min(time) as time from danmu_info\n" +
+                        "where bv = ? and time between ? and ?\n" +
+                        "group by content) s on d.content = s.content and d.time = s.time\n" +
+                        "order by d.time";
                 stmt = conn.prepareStatement(sql3);
                 stmt.setString(1, bv);
                 stmt.setFloat(2, timeStart);
@@ -155,6 +164,7 @@ public class DanmuServiceImpl implements DanmuService {
             stmt = conn.prepareStatement(sql5);
             stmt.setString(1, bv);
             stmt.setLong(2, auth.getMid());
+            rs = stmt.executeQuery();
             if (!rs.next()){
                 rs.close();
                 stmt.close();
@@ -167,7 +177,7 @@ public class DanmuServiceImpl implements DanmuService {
             stmt.setLong(2, id);
             rs = stmt.executeQuery();
             if (!rs.next()){
-                String sql3 = "insert into danmu_like (mid, danmu_id) values (?,?)";
+                String sql3 = "insert into like_danmu (mid, danmu_id) values (?,?)";
                 stmt = conn.prepareStatement(sql3);
                 stmt.setLong(1, auth.getMid());
                 stmt.setLong(2, id);
@@ -176,7 +186,7 @@ public class DanmuServiceImpl implements DanmuService {
                 stmt.close();
                 return true;
             }else {
-                String sql4 = "delete from danmu_like where mid = ? and danmu_id = ?";
+                String sql4 = "delete from like_danmu where mid = ? and danmu_id = ?";
                 stmt = conn.prepareStatement(sql4);
                 stmt.setLong(1, auth.getMid());
                 stmt.setLong(2, id);
