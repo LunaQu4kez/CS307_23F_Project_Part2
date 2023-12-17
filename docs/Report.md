@@ -27,6 +27,8 @@
 
 ![](../pic/database_diagram.png)
 
+
+
 ### 3. Table Design Description
 
 We design **11** tables for this project, **10** of them are basic tables and others are help tables to increase efficiency. A brief description of each table is as follows.
@@ -53,6 +55,8 @@ We design **11** tables for this project, **10** of them are basic tables and ot
 
 **max_id**: records the max value of `mid` exists now, in order to increase the efficiency of register a new user (we only need to use (`max_mid` + 1) to be the new user's mid)
 
+
+
 ### 4. Database Privilege
 
 The user has been used in this project is called `manager`, and the database we used in this project is called `project2`. The user `manager` has privilege to access to all tables and do select, insert, update, delete and truncate operations of schema `public` in database `project2`. Here are the sql statement to create user `manager`:
@@ -62,8 +66,9 @@ create user manager with password '123456';
 grant connect on database project2 to manager;
 grant usage on schema public to manager;
 grant select, insert, update, delete, truncate on all tables in schema public to manager;
-commit;
 ```
+
+
 
 
 
@@ -179,6 +184,8 @@ If all the checks passed, a new record will be insert into `coin_video` or `like
 
 
 
+
+
 ## Implement Optimize
 
 ### 1. Optimization of Import Data
@@ -236,11 +243,81 @@ We test the time cost of import data before optimize and after optimize **each f
 
 ### 2. Password Protection
 
+To enhance out system's security, we encryption the password then insert them into database. **If someone intrusion the database and steal all the records, he can directly know everyone's password, which is very dangerous.** So we should encryption the password then insert them into database. Then comes a problem, how should we encryption the password.
 
+At first, we think we can use a one-to-one function (denote as *f* ), then we insert *f(password)* into database, and when we want to check `AuthInfo`, we calculate *g(password after encryption)* (*g* is the inverse function of *f*). In cryptography, this is called symmetric cryptography, which means the message sender and receiver share the same secret key for both encryption and decryption. **But this is not security enough, because the encryption process can be inverse so if someone know only one side's secret key, the password will be decipher.**
+
+Then, there comes an idea. **We can use irreversible encryption.** We assign a hash function and when the password is inserted into database, we call this hash function and insert the result after encipher. When we want to check whether the `AuthInfo` is valid or not, we call this hash function again and compare the result of the password the user gives after encipher to the account's password after encipher in the database. This is much safer than the first method.
+
+In cryptography, the is a concept called **salt**, which means the process of adding salt by inserting a specific string at any fixed position in the password, so that the hash result does not match the hash result using the original password. Usually, when a field is hashed (such as MD5), a hash value is generated, and the hashed value cannot be obtained by a specific algorithm to obtain the original field. **However, in some cases, such as a large [rainbow table](https://www.zhihu.com/question/19790488), searching for the MD5 value in the table may very quickly find the true field content corresponding to the hash value.** The hashed value after salt addition can greatly reduce the risk of password leakage caused by user data theft. Even if the original content corresponding to the hashed value is found through the rainbow table, the characters inserted after salt addition can interfere with the real password, greatly reducing the probability of obtaining the real password.
+
+```java
+public static final long[] BASE = {1, 257, 66049, 197425, 406721, 718570, 123642, 318804, 143934, 290983, 333948, 890223, 198397, 656525, 955245, 131883, 339595, 244356, 933685, 882401};
+public static final long MOD_A = 1048573;
+public static final long MOD_B = 2147483647;
+public static String hash(String str, long mid) {
+    long result = str.charAt(0);
+    for (int i = 1; i < str.length(); i++) result = (str.charAt(i) * BASE[i] % MOD_A + result) % MOD_A;
+    return Long.toString(Long.parseLong(result + Long.toString(mid % MOD_A)) % MOD_B);
+}
+```
+
+The code show forward is out hash function. In our project, we directly append a decimal number at the end of an account's password. In order to try to make the salt be different and evenly distributed, we choose a mod `MOD_A = 1048573 ` (a prime number), and the `mid` of the user mod `MOD_A` will be the salt. Because ASCII has 255 chars, so we choose a prime 257 to be the base we encipher password. The array `BASE` is the pretreatment 257 power array mod `MOD_A`.
+
+**After tested, the collision rate of this hash function is very low (< 0.01%).** Although encipher password through a hash function may cause collision in a very few extreme cases, it extremely make the database much safer.
 
 
 
 ### 3. BV Generating Algorithm
 
+This algorithm is inspired by [link1](https://www.zhihu.com/question/381784377/answer/1099438784), [link2](https://zhuanlan.zhihu.com/p/139501329).
 
+We have designed an algorithm to **generate a new video's bv and this can effectively avoiding bv collision**. Every video has a field called av, and this is a **unique** (every video's av are different) long number. And there is a relationship between a video's av and bv (which means for a video, av and bv can mutually transformation), the transformation method is as follow.
 
+```java
+private static final String key = "fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTKNPAwcF";
+private static final int[] pos = {11, 10, 3, 8, 4, 6};
+private static final long xorNum = 177451812;
+private static final long minusNum = 8728348608L;
+
+private static long bv2av(String bv) {
+    long num = 0;
+    for (int i = 0; i < pos.length; i++)
+        num = (long) (num + key.indexOf(bv.charAt(pos[i])) * Math.pow(58, i));
+    return (num - minusNum) ^ xorNum;
+}
+
+private static String av2bv(long av) {
+    av = (av ^ xorNum) + minusNum;
+    String[] tmp = "BV1  4 1 7  ".split("");
+    for (int i = 0; i < pos.length; i++)
+        tmp[pos[i]] = key.split("")[(int) (av / Math.pow(58, i) % 58)];
+    return String.join("", tmp);
+}
+```
+
+When we want to create a new bv, we get all the exist videos' bv and trasform them into av. Then find the maximum of existed av, the new video's av would be max_av + 1, **this promise the uniqueness of av**. Next convert the new video's av to bv and the new video's bv has been generated.
+
+Then we explain our transformation algorithm. Choose transform bv to av as an example (the transformation of av to bv is just a reverse process). The bv of a video must be "BV" at beginning and another 10 digits after. Assuming the highest bit is the 0th bit and the lowest bit is the 9th bit, then the 0th bit must be 1, the 3rd bit must be 4, the 5th bit must be 1, and the 7th bit must be 7. Namely, **bv's last 10 digits must be "1xx4x1x7xx"**, these known digits did not participate in the calculation of av number. **f, Z, o, d, R, 9, X, Q, D, S, U, m, 2,1, y, C, k, r, 6, z, B, q, i, v, e, Y, a, h, 8, b, t, 4, x, s, W, p, H, n, J, E, 7, j, L, 5, V, G, 3, g, u, M, T, K, N, P, A, w, c, F represent the 58 base expressed in the range of 0 to 57, respectively.** This is called a confusion table, the table is as follow.
+
+| 1    | 2    | 3    | 4    | 5    | 6    | 7    | 8    | 9    |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| 13   | 12   | 46   | 31   | 43   | 18   | 40   | 28   | 5    |
+| A    | B    | C    | D    | E    | F    | G    | H    | I    |
+| 54   | 20   | 15   | 8    | 39   | 57   | 45   | 36   | /    |
+| J    | K    | L    | M    | N    | O    | P    | Q    | R    |
+| 38   | 51   | 42   | 49   | 52   | /    | 53   | 7    | 4    |
+| S    | T    | U    | V    | W    | X    | Y    | Z    |      |
+| 9    | 50   | 10   | 44   | 34   | 6    | 25   | 1    |      |
+| a    | b    | c    | d    | e    | f    | g    | h    | i    |
+| 26   | 29   | 56   | 3    | 24   | 0    | 47   | 27   | 22   |
+| j    | k    | l    | m    | n    | o    | p    | q    | r    |
+| 41   | 16   | /    | 11   | 37   | 2    | 35   | 21   | 17   |
+| s    | t    | u    | v    | w    | x    | y    | z    |      |
+| 33   | 30   | 48   | 23   | 55   | 32   | 14   | 19   |      |
+
+ Then replace each number in the bv number with a decimal representation of the number. The only truly useful ones are positions 1, 2, 4, 6, 8, and 9. Then calculate a 10 base number s use the following formula.
+$$
+(s)_{10} = (\overline{bv[4],bv[2],bv[6],bv[1],bv[8],bv[9]})_{58}
+$$
+Finally, subtract the constant 8728348608 from s, and the result obtained is XOR with 77451812. The result is represented as a decimal number, which is the av.
