@@ -78,9 +78,33 @@ At first, we create a class called `Authenticaiton` and there exists a static me
 
 ### DatabaseServiceImpl.java
 
+There are 3 methods to implement in this interface.
 
+``` java
+public List<Integer> getGroupMembers() 
+```
 
+This method returns a list contain group members' student ID.
 
+```java
+public void importData(
+            List<DanmuRecord> danmuRecords,
+            List<UserRecord> userRecords,
+            List<VideoRecord> videoRecords
+    ) 
+```
+
+This method inserts data through batch processing.
+
+The set value is 1000, and the quantity of each batch can be modified by the variable``public static int BATCH_SIZE``. 
+
+In the subsequent report, we optimized this insertion by using multi-threading, and the decision to use faster insertion can be determined by the variable ``public static boolean USE_FASTER_IMPORT``.
+
+```java
+ public void truncate() 
+```
+
+This method truncates all tables.
 
 ### UserServiceImpl.java
 
@@ -178,13 +202,53 @@ If all the checks passed, a new record will be insert into `coin_video` or `like
 
 ### RecommenderServiceImpl.java
 
+There are 3 methods to implement in this interface.
 
+```JAVA
+ public List<String> recommendNextVideo(String bv) 
+```
 
+This method recommends five videos based on the common viewers of the current video and other videos.
 
+First, we check if the input is valid. If the video does not exist in the visible videos, return null. 
 
+Then, we use SQL to find videos that have common viewers with it, sort them, and return the top five.
 
+```java
+public List<String> generalRecommendations(int pageSize, int pageNum)
+```
 
+This method recommends videos based on video scores.
 
+First, we check if the input is valid. If not, return null.
+
+Then we use SQL to query the scores of each video, specifically querying the ratio of likes, coins, favorites, bullet comments, and completion. Then we add them together. 
+
+It is worth noting that there are many data points where the video has not been watched but has received likes, etc., so we do not consider this part of the data. We only consider the actions performed on videos that have been watched.
+
+Last, we  return the required videos' bv as a ``list``.
+
+```java
+public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum)
+```
+
+This method is based on interests, specifically the videos watched by friends, to recommend videos.
+
+First, we check if the input is valid. If not, return null.
+
+Next, we use SQL queries to check if the user has any friends. If they don't, we call ``generalRecommendations(int pageSize, int pageNum)``.
+
+Then, we use SQL queries to find videos that at least one friend has watched, and then we sort them to return the required videos' bv as a ``list``.
+
+```java
+public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) 
+```
+
+This method recommends other users to a specific user based on their mutual following with the user's friends.
+
+First, we check if the input is valid. If not, return null.
+
+Then, we use SQL to find the users who followed same users with this user, but are not followed by this user. The users are then sorted and returned as a ``list`` of mid.
 
 ## Implement Optimize
 
