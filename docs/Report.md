@@ -19,7 +19,7 @@
 
 ### 1. E-R Diagram
 
-
+![](../pic/ER_diagram.png)
 
 
 
