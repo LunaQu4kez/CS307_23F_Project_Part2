@@ -22,12 +22,20 @@ public class RecommenderServiceImpl implements RecommenderService {
 
     @Override
     public List<String> recommendNextVideo(String bv) {
-        String sql1 = "select exists (select * from video_info where video_id = ?);";
-        String sql2 = "select v.bv, count(*) as cnt from view_video v join (select up_mid, fans_mid as friends_mid from follow where (fans_mid, up_mid) in (select up_mid, fans_mid from follow) and up_mid = ?) f on f.friends_mid = v.mid join video_info i on v.bv = i.bv join user_info ui on i.owner_mid = ui.mid where (v.bv, f.up_mid) not in (select bv, mid from view_video where mid = ?) and i.can_see = true and ? >= i.public_time group by v.bv, ui.level, i.public_time order by cnt desc, ui.level desc, i.public_time desc;";
+        String sql1 = "select exists (select * from video_info where bv = ?);";
+        String sql2 = "WITH video_viewers AS (SELECT mid, bv FROM view_video WHERE bv = ?)\n" +
+                "SELECT v1.bv, COUNT(*) AS num_common_viewers\n" +
+                "FROM view_video v1 JOIN video_info v2 on v1.bv = v2.bv\n" +
+                "WHERE v1.mid IN (SELECT video_viewers.mid FROM video_viewers)\n" +
+                "  AND v2.bv <> ?\n" +
+                "  AND v2.can_see IS TRUE\n" +
+                "  AND ? >= v2.public_time\n" +
+                "GROUP BY v1.bv\n" +
+                "ORDER BY num_common_viewers DESC\n" +
+                "LIMIT 5";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt1 = conn.prepareStatement(sql1)) {
             stmt1.setString(1, bv);
-            stmt1.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
             ResultSet rs = stmt1.executeQuery();
             if (!rs.next()) {
                 return null;
@@ -40,10 +48,11 @@ public class RecommenderServiceImpl implements RecommenderService {
              PreparedStatement stmt = conn.prepareStatement(sql2)) {
             stmt.setString(1, bv);
             stmt.setString(2, bv);
+            stmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
             List<String> result = new ArrayList<>();
             ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                result.add(rs.getString("num"));
+            while (rs.next()){
+                result.add(rs.getString("bv"));
             }
             rs.close();
             return result;
@@ -65,7 +74,7 @@ public class RecommenderServiceImpl implements RecommenderService {
                 "              from like_video\n" +
                 "              where (bv, mid) in (select bv, mid from view_video)\n" +
                 "              group by bv\n" +
-                "              having count(*) > 0) like_cnt on\n" +
+                "              having count(*) > 0) like_cnt on view_cnt.bv = like_cnt.bv\n" +
                 "         join (select bv, count(*) as count_coin\n" +
                 "               from coin_video\n" +
                 "               where (bv, mid) in (select bv, mid from view_video)\n" +
@@ -91,10 +100,10 @@ public class RecommenderServiceImpl implements RecommenderService {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             List<String> result = new ArrayList<>();
-            stmt.setInt(1, pageSize * pageNum);
-            stmt.setTimestamp(2,new Timestamp(System.currentTimeMillis()));
+            stmt.setInt(2, pageSize * pageNum);
+            stmt.setTimestamp(1,new Timestamp(System.currentTimeMillis()));
             ResultSet rs = stmt.executeQuery();
-            for (int i = 1; i <= pageNum * pageSize; i++) if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getString("rate"));
+            for (int i = 1; i <= pageNum * pageSize; i++) if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getString("bv"));
             rs.close();
             return result;
         } catch (Exception e) {
@@ -122,7 +131,6 @@ public class RecommenderServiceImpl implements RecommenderService {
              PreparedStatement stmt = conn.prepareStatement(sql1)) {
             stmt.setLong(1, auth.getMid());
             stmt.setLong(2, auth.getMid());
-            stmt.setTimestamp(3,new Timestamp(System.currentTimeMillis()));
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 if (rs.getInt("count") == 0) return generalRecommendations(pageSize, pageNum);
@@ -135,6 +143,7 @@ public class RecommenderServiceImpl implements RecommenderService {
             List<String> result = new ArrayList<>();
             stmt.setLong(1,auth.getMid());
             stmt.setLong(2,auth.getMid());
+            stmt.setTimestamp(3,new Timestamp(System.currentTimeMillis()));
             ResultSet rs = stmt.executeQuery();
             for (int i = 1; i <= pageNum * pageSize; i++) if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getString("bv"));
             rs.close();
