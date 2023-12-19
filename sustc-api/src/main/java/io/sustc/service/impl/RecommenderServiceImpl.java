@@ -22,7 +22,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 
     @Override
     public List<String> recommendNextVideo(String bv) {
-        String sql1 = "select exists (select * from video_info where bv = ?);";
+        String sql1 = "select * from video_info where bv = ?";
         String sql2 = "WITH video_viewers AS (SELECT mid, bv FROM view_video WHERE bv = ?)\n" +
                 "SELECT v1.bv, COUNT(*) AS num_common_viewers\n" +
                 "FROM view_video v1 JOIN video_info v2 on v1.bv = v2.bv\n" +
