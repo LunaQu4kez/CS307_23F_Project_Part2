@@ -148,7 +148,7 @@ public class RecommenderServiceImpl implements RecommenderService {
     @Override
     public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
         if (pageSize <= 0 || pageNum <= 0 || !Authentication.authentication(auth,dataSource)) return null;
-        String sql = "select count(*) as cnt, af.up_mid as rec from (select up_mid, fans_mid from follow where fans_mid = ?) af join (select up_mid, fans_mid from follow where fans_mid <> ?) bf on af.up_mid = bf.up_mid join user_info on af.up_mid = user_info.mid where (bf.fans_mid, af.fans_mid) not in (select up_mid, fans_mid from follow where fans_mid = ?) group by af.up_mid, level order by cnt desc, level desc;"
+        String sql = "select count(*) as cnt, af.up_mid as rec from (select up_mid, fans_mid from follow where fans_mid = ?) af join (select up_mid, fans_mid from follow where fans_mid <> ?) bf on af.up_mid = bf.up_mid join user_info on af.up_mid = user_info.mid where (bf.fans_mid, af.fans_mid) not in (select up_mid, fans_mid from follow where fans_mid = ?) group by af.up_mid, level order by cnt desc, level desc;";
         try(Connection conn = dataSource.getConnection();
         PreparedStatement stmt = conn.prepareStatement(sql)){
             List<Long> result = new ArrayList<>();
