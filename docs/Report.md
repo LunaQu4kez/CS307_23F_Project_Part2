@@ -108,10 +108,43 @@ This method truncates all tables.
 
 ### UserServiceImpl.java
 
+There are 4 methods to implement in this interface. 
 
+```java
+long register(RegisterUserReq req);
+```
 
+Firstly, check whether the `RegisterUserReq` is valid. if not, return -1.  
 
+If the check is passed, query the max_mid in `max_mid,` and use it add 1 to generate the mid of the new user. Then insert the information into `user_info` and `user_auth` successively. Meanwhile, update the max_mid in `max_mid`.
 
+```java
+boolean deleteAccount(AuthInfo auth, long mid);
+```
+
+First verify if the `AuthInfo` is valid or not. If not, return false.  
+
+Then search if there exists the user relating to the mid. If not, return false.
+
+If both the user that initiated the command and the deleted user are the same or the identity of initiator is `superuser` as well as the deleted user is just `user`, it will be deleted successfully. 
+
+```java
+boolean follow(AuthInfo auth, long followeeMid);
+```
+
+First verify if the `AuthInfo` is valid or not. If not, return false.
+
+Then search if there exists the user relating to the followeeMid. If not, return false.
+
+If the user has followed the followeemid when performing this operation, it will be deleted from `follow`. On the contrary, it will be inserted.
+
+```java
+UserInfoResp getUserInfo(long mid);
+```
+
+Firstly, search if there exists the user relating to the mid. If not, return null.
+
+Then use sql query statements to obtain the information and return all needed information.  
 ### VideoServiceImpl.java
 
 There are 10 methods to implement in this interface.
@@ -196,8 +229,35 @@ If all the checks passed, a new record will be insert into `coin_video` or `like
 
 ### DanmuServiceImpl.java
 
+There are 3 methods to implement in this interface.
+
+```java
+long sendDanmu(AuthInfo auth, String bv, String content, float time);
+```
+
+If any corner cases happened, return -1.
+
+If all the checks passed, insert all the information into `danmu_info` and return the new danmu_id.
+
+```java
+List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter);
+```
+
+If any corner cases happened, return null.
+
+If all the checks passed, judge whether it's filter. If not, just display all danmu in this video between the given time. On the contrary, use sql statement to filter out the same danmu while retaining the earliest. 
 
 
+
+```java
+boolean likeDanmu(AuthInfo auth, long id);
+```
+
+First verify if the `AuthInfo` is valid or not. If not, return false.
+
+Then search whether the id exists and whether the user watched the video where the danmu is. If not, return false.  
+
+If the user has liked the Danmu when performing this operation, it will be deleted from `like_danmu`. On the contrary, it will be inserted.
 
 
 ### RecommenderServiceImpl.java

@@ -108,22 +108,6 @@ public class UserServiceImpl implements UserService {
                 return false;
             }
 
-//            if (rs.getString(3) != null && rs.getString(4) != null &&
-//                    (!auth.getQq().equals(rs.getString(3))
-//                            || !auth.getWechat().equals(rs.getString(4)))){
-//                rs.close();
-//                stmt.close();
-//                return false;
-//            }
-//
-//            if (auth.getMid() == 0 &&
-//                    (auth.getQq() == null || auth.getQq().equals("")) &&
-//                    (auth.getWechat() == null || auth.getWechat().equals(""))) {
-//                rs.close();
-//                stmt.close();
-//                return false;
-//            }
-
             String sql2 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql2);
             stmt.setLong(1, mid);
@@ -148,6 +132,10 @@ public class UserServiceImpl implements UserService {
                 stmt.close();
                 return false;
             }
+            String sql5 = "delete from user_auth where mid = ?";
+            stmt = conn.prepareStatement(sql5);
+            stmt.setLong(1, mid);
+            stmt.executeUpdate();
 
             String sql4 = "delete from user_info where mid = ?";
             stmt = conn.prepareStatement(sql4);
