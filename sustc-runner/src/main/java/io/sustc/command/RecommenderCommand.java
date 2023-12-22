@@ -42,7 +42,6 @@ public class RecommenderCommand {
                 .qq(qq)
                 .wechat(wechat)
                 .build();
-
         return recommenderService.recommendVideosForUser(auth, pageSize, pageNum);
     }
 
@@ -66,7 +65,6 @@ public class RecommenderCommand {
                 .qq(qq)
                 .wechat(wechat)
                 .build();
-
         return recommenderService.recommendFriends(auth, pageSize, pageNum);
     }
 }

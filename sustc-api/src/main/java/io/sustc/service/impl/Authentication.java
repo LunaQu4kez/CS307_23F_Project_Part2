@@ -3,15 +3,20 @@ package io.sustc.service.impl;
 import io.sustc.dto.AuthInfo;
 
 import javax.sql.DataSource;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
+import org.apache.commons.codec.digest.DigestUtils;
+
 public class Authentication {
     private static final boolean USE_HASH = true;
+    private static final boolean USE_MD5 = true;
     public static final long[] BASE = {1, 257, 66049, 197425, 406721, 718570, 123642, 318804, 143934, 290983, 333948, 890223, 198397, 656525, 955245, 131883, 339595, 244356, 933685, 882401};
     public static final long MOD_A = 1048573;
     public static final long MOD_B = 2147483647;
+    public static final BigInteger MOD_C = new BigInteger("9223372036854775783");
 
 
     public static boolean authentication(AuthInfo auth, DataSource dataSource) {
@@ -69,8 +74,13 @@ public class Authentication {
 
     public static String hash(String str, long mid) {
         if (!USE_HASH) return str;
+        if (USE_MD5) return MD5SaltHash(str, mid);
         long result = str.charAt(0);
         for (int i = 1; i < str.length(); i++) result = (str.charAt(i) * BASE[i] % MOD_A + result) % MOD_A;
-        return Long.toString(Long.parseLong(result +Long.toString(mid % MOD_A)) % MOD_B);
+        return Long.toString(Long.parseLong(result + Long.toString(mid % MOD_A)) % MOD_B);
+    }
+
+    public static String MD5SaltHash(String str, long mid) {
+        return new BigInteger(DigestUtils.md5Hex(str) + mid % MOD_A, 16).mod(MOD_C).toString();
     }
 }
