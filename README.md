@@ -53,13 +53,13 @@ CS307_23F_Project_Part2
 - [x] 数据库设计
 
 - [x] 建表 sql
-- [ ] E-R 图
+- [x] E-R 图
 - [x] 完成 DatabaseService 实现类
 
 - [x] 完成 UserService 实现类
 - [x] 完成 VideoService 实现类
 - [x] 完成 DanmuService 实现类
-- [ ] 完成 RecommenderService 实现类
+- [x] 完成 RecommenderService 实现类
 - [x] 导入数据多线程优化
 - [x] 密码加密存入
 - [x] BV 生成算法
