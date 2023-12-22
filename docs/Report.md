@@ -88,10 +88,10 @@ This method returns a list contain group members' student ID.
 
 ```java
 public void importData(
-            List<DanmuRecord> danmuRecords,
-            List<UserRecord> userRecords,
-            List<VideoRecord> videoRecords
-    ) 
+    List<DanmuRecord> danmuRecords,
+    List<UserRecord> userRecords,
+    List<VideoRecord> videoRecords
+) 
 ```
 
 This method inserts data through batch processing.
@@ -101,7 +101,7 @@ The set value is 1000, and the quantity of each batch can be modified by the var
 In the subsequent report, we optimized this insertion by using multi-threading, and the decision to use faster insertion can be determined by the variable ``public static boolean USE_FASTER_IMPORT``.
 
 ```java
- public void truncate() 
+public void truncate() 
 ```
 
 This method truncates all tables.
@@ -247,8 +247,6 @@ If any corner cases happened, return null.
 
 If all the checks passed, judge whether it's filter. If not, just display all danmu in this video between the given time. On the contrary, use sql statement to filter out the same danmu while retaining the earliest. 
 
-
-
 ```java
 boolean likeDanmu(AuthInfo auth, long id);
 ```
@@ -257,7 +255,7 @@ First verify if the `AuthInfo` is valid or not. If not, return false.
 
 Then search whether the id exists and whether the user watched the video where the danmu is. If not, return false.  
 
-If the user has liked the Danmu when performing this operation, it will be deleted from `like_danmu`. On the contrary, it will be inserted.
+If the user has liked the danmu when performing this operation, it will be deleted from `like_danmu`. On the contrary, it will be inserted.
 
 
 ### RecommenderServiceImpl.java
@@ -265,7 +263,7 @@ If the user has liked the Danmu when performing this operation, it will be delet
 There are 3 methods to implement in this interface.
 
 ```JAVA
- public List<String> recommendNextVideo(String bv) 
+public List<String> recommendNextVideo(String bv) 
 ```
 
 This method recommends five videos based on the common viewers of the current video and other videos.
@@ -309,6 +307,10 @@ This method recommends other users to a specific user based on their mutual foll
 First, we check if the input is valid. If not, return null.
 
 Then, we use SQL to find the users who followed same users with this user, but are not followed by this user. The users are then sorted and returned as a ``list`` of mid.
+
+
+
+
 
 ## Implement Optimize
 
@@ -391,12 +393,16 @@ The code show forward is out hash function. In our project, we directly append a
 However, this encryption still has **two sets** of duplicates when importing into the database, indicating that hash collisions have occurred. This reflects the possibility of brute-force attacks on the passwords.
 
 ```java
+public static final long MOD_A = 1048573;
+public static final BigInteger MOD_C = new BigInteger("9223372036854775783");
 public static String MD5SaltHash(String str, long mid) {
-        return new BigInteger(DigestUtils.md5Hex(str) + mid % MOD_A, 16).mod(MOD_C).toString();
-    }
+    return new BigInteger(DigestUtils.md5Hex(str) + mid % MOD_A, 16).mod(MOD_C).toString();
+}
 ```
 
- The above code encrypts the string using MD5, then concatenates it with a salt value obtained from the ``mid`` parameter, and finally applies the modulo operation with a prime number``MOD_C =  9223372036854775783`` which close to 2^63 to generate a string that is stored in the database. By querying, **it is known that this method does not have any hash function compared to the first encryption method which had two duplicate passwords.** This further reduces the likelihood of collisions and lowers the risk of password leakage.
+ The above code encrypts the string using MD5, then concatenates it with a salt value obtained from the ``mid`` parameter, and finally applies the modulo operation with a prime number``MOD_C = 9223372036854775783`` which close to 2^63 to generate a string that is stored in the database. By querying, **it is known that this method does not have any hash function compared to the first encryption method which had two duplicate passwords.** This further reduces the likelihood of collisions and lowers the risk of password leakage.
+
+
 
 ### 3. BV Generating Algorithm
 
