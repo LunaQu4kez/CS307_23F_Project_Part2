@@ -23,7 +23,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public String postVideo(AuthInfo auth, PostVideoReq req) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return null;
         }
 
@@ -75,7 +76,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -116,7 +118,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -175,7 +178,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return null;
         }
         if (keywords == null || keywords.equals("") || pageSize <= 0 || pageNum <= 0) {
@@ -345,7 +349,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean reviewVideo(AuthInfo auth, String bv) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -395,7 +400,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean coinVideo(AuthInfo auth, String bv) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -469,7 +475,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean likeVideo(AuthInfo auth, String bv) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -530,7 +537,8 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean collectVideo(AuthInfo auth, String bv) {
-        if (!Authentication.authentication(auth, dataSource)) {
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {

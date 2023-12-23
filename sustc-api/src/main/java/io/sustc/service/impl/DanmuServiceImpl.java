@@ -18,7 +18,8 @@ public class DanmuServiceImpl implements DanmuService {
     @Override
 
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
-        if (!Authentication.authentication(auth, dataSource)){
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return -1;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -46,7 +47,7 @@ public class DanmuServiceImpl implements DanmuService {
 
             String sql2 = "select * from view_video where mid = ? and bv = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             stmt.setString(2, bv);
             rs = stmt.executeQuery();
             if (!rs.next()){
@@ -67,7 +68,7 @@ public class DanmuServiceImpl implements DanmuService {
             PreparedStatement stmt1 = conn.prepareStatement(sql3, Statement.RETURN_GENERATED_KEYS);
             stmt1.setLong(1, cnt + 1);
             stmt1.setString(2, bv);
-            stmt1.setLong(3, auth.getMid());
+            stmt1.setLong(3, auth_mid);
             stmt1.setFloat(4, time);
             stmt1.setString(5, content);
             stmt1.setTimestamp(6, current);
@@ -148,7 +149,8 @@ public class DanmuServiceImpl implements DanmuService {
 
     @Override
     public boolean likeDanmu(AuthInfo auth, long id) {
-        if (!Authentication.authentication(auth, dataSource)){
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -166,7 +168,7 @@ public class DanmuServiceImpl implements DanmuService {
             String sql5 = "select * from view_video where bv= ? and mid = ?";
             stmt = conn.prepareStatement(sql5);
             stmt.setString(1, bv);
-            stmt.setLong(2, auth.getMid());
+            stmt.setLong(2, auth_mid);
             rs = stmt.executeQuery();
             if (!rs.next()){
                 rs.close();
@@ -176,13 +178,13 @@ public class DanmuServiceImpl implements DanmuService {
 
             String sql2 = "select * from like_danmu where mid = ? and danmu_id = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             stmt.setLong(2, id);
             rs = stmt.executeQuery();
             if (!rs.next()){
                 String sql3 = "insert into like_danmu (mid, danmu_id) values (?,?)";
                 stmt = conn.prepareStatement(sql3);
-                stmt.setLong(1, auth.getMid());
+                stmt.setLong(1, auth_mid);
                 stmt.setLong(2, id);
                 stmt.executeUpdate();
                 rs.close();
@@ -191,7 +193,7 @@ public class DanmuServiceImpl implements DanmuService {
             }else {
                 String sql4 = "delete from like_danmu where mid = ? and danmu_id = ?";
                 stmt = conn.prepareStatement(sql4);
-                stmt.setLong(1, auth.getMid());
+                stmt.setLong(1, auth_mid);
                 stmt.setLong(2, id);
                 stmt.executeUpdate();
                 rs.close();

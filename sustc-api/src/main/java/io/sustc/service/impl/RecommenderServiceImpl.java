@@ -114,7 +114,8 @@ public class RecommenderServiceImpl implements RecommenderService {
 
     @Override
     public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
-        if (pageSize <= 0 || pageNum <= 0 || !Authentication.authentication(auth, dataSource)) return null;
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (pageSize <= 0 || pageNum <= 0 || auth_mid == 0) return null;
         String sql1 = "select up_mid,fans_mid from follow where up_mid = ? intersect select up_mid,fans_mid from follow where fans_mid = ?";
         String sql2 = "select v.bv, count(*) as cnt\n" +
                 "from view_video v\n" +
@@ -129,8 +130,8 @@ public class RecommenderServiceImpl implements RecommenderService {
                 "order by cnt desc, ui.level, i.public_time;";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql1)) {
-            stmt.setLong(1, auth.getMid());
-            stmt.setLong(2, auth.getMid());
+            stmt.setLong(1, auth_mid);
+            stmt.setLong(2, auth_mid);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 if (rs.getInt("count") == 0) return generalRecommendations(pageSize, pageNum);
@@ -141,8 +142,8 @@ public class RecommenderServiceImpl implements RecommenderService {
         try(Connection conn = dataSource.getConnection();
         PreparedStatement stmt = conn.prepareStatement(sql2)){
             List<String> result = new ArrayList<>();
-            stmt.setLong(1,auth.getMid());
-            stmt.setLong(2,auth.getMid());
+            stmt.setLong(1,auth_mid);
+            stmt.setLong(2,auth_mid);
             stmt.setTimestamp(3,new Timestamp(System.currentTimeMillis()));
             ResultSet rs = stmt.executeQuery();
             for (int i = 1; i <= pageNum * pageSize; i++) if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getString("bv"));
@@ -156,14 +157,21 @@ public class RecommenderServiceImpl implements RecommenderService {
 
     @Override
     public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
-        if (pageSize <= 0 || pageNum <= 0 || !Authentication.authentication(auth,dataSource)) return null;
-        String sql = "select count(*) as cnt, af.up_mid as rec from (select up_mid, fans_mid from follow where fans_mid = ?) af join (select up_mid, fans_mid from follow where fans_mid <> ?) bf on af.up_mid = bf.up_mid join user_info on af.up_mid = user_info.mid where (bf.fans_mid, af.fans_mid) not in (select up_mid, fans_mid from follow where fans_mid = ?) group by af.up_mid, level order by cnt desc, level desc;";
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (pageSize <= 0 || pageNum <= 0 || auth_mid == 0) return null;
+        String sql = "select count(*) as cnt, af.up_mid as rec " +
+                "from (select up_mid, fans_mid from follow where fans_mid = ?) af " +
+                "join (select up_mid, fans_mid from follow where fans_mid <> ?) bf " +
+                "on af.up_mid = bf.up_mid " +
+                "join user_info on af.up_mid = user_info.mid " +
+                "where (bf.fans_mid, af.fans_mid) not in (select up_mid, fans_mid from follow where fans_mid = ?) " +
+                "group by af.up_mid, level order by cnt desc, level desc, rec asc";
         try(Connection conn = dataSource.getConnection();
         PreparedStatement stmt = conn.prepareStatement(sql)){
             List<Long> result = new ArrayList<>();
-            stmt.setLong(1,auth.getMid());
-            stmt.setLong(2,auth.getMid());
-            stmt.setLong(3,auth.getMid());
+            stmt.setLong(1,auth_mid);
+            stmt.setLong(2,auth_mid);
+            stmt.setLong(3,auth_mid);
             ResultSet rs = stmt.executeQuery();
             for (int i = 1; i <= pageNum * pageSize; i++) if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getLong("rec"));
             rs.close();

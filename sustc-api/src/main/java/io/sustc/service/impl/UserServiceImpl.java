@@ -94,7 +94,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public boolean deleteAccount(AuthInfo auth, long mid) {
-        if (!Authentication.authentication(auth, dataSource)){
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -117,17 +118,17 @@ public class UserServiceImpl implements UserService {
 
             String sql3 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql3);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             rs = stmt.executeQuery();
             rs.next();
             String AuthIden = rs.getString(1);
 
-            if (AuthIden.equals("user") && mid != auth.getMid()){
+            if (AuthIden.equals("user") && mid != auth_mid){
                 rs.close();
                 stmt.close();
                 return false;
             }
-            if (AuthIden.equals("superuser") && !DeleIden.equals("user") && mid != auth.getMid()){
+            if (AuthIden.equals("superuser") && !DeleIden.equals("user") && mid != auth_mid){
                 rs.close();
                 stmt.close();
                 return false;
@@ -152,7 +153,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public boolean follow(AuthInfo auth, long followeeMid) {
-        if (!Authentication.authentication(auth, dataSource)){
+        long auth_mid = Authentication.authentication(auth, dataSource);
+        if (auth_mid == 0){
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -169,14 +171,14 @@ public class UserServiceImpl implements UserService {
             String sql2 = "select * from follow where up_mid = ? and fans_mid = ?";
             stmt = conn.prepareStatement(sql2);
             stmt.setLong(1, followeeMid);
-            stmt.setLong(2, auth.getMid());
+            stmt.setLong(2, auth_mid);
             rs = stmt.executeQuery();
 
             if (!rs.next()){
                 String sql3 = "insert into follow (up_mid, fans_mid) values (?, ?)";
                 stmt = conn.prepareStatement(sql3);
                 stmt.setLong(1, followeeMid);
-                stmt.setLong(2, auth.getMid());
+                stmt.setLong(2, auth_mid);
                 stmt.executeUpdate();
                 rs.close();
                 stmt.close();
@@ -185,7 +187,7 @@ public class UserServiceImpl implements UserService {
                 String sql4 = "delete from follow where up_mid = ? and fans_mid = ?";
                 stmt = conn.prepareStatement(sql4);
                 stmt.setLong(1, followeeMid);
-                stmt.setLong(2, auth.getMid());
+                stmt.setLong(2, auth_mid);
                 stmt.executeUpdate();
                 rs.close();
                 stmt.close();

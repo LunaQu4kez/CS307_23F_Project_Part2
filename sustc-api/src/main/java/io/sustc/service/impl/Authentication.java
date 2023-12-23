@@ -19,56 +19,53 @@ public class Authentication {
     public static final BigInteger MOD_C = new BigInteger("9223372036854775783");
 
 
-    public static boolean authentication(AuthInfo auth, DataSource dataSource) {
+    public static long authentication(AuthInfo auth, DataSource dataSource) {
+        boolean b1 = auth.getMid() != 0 && auth.getPassword() != null && !auth.getPassword().equals("");
+        boolean b2 = auth.getQq() != null && !auth.getQq().equals("");
+        boolean b3 = auth.getWechat() != null && !auth.getWechat().equals("");
+
         try (Connection conn = dataSource.getConnection()) {
-            String sql = "select password, qq, wechat from user_auth where mid = ?";
-            long mid = auth.getMid();
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setLong(1, mid);
-            ResultSet rs = stmt.executeQuery();
-            if (!rs.next()) {
-                rs.close();
-                stmt.close();
-                return false;
+            if (b1) {
+                String sql = "select password from user_auth where mid = ?";
+                long mid = auth.getMid();
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setLong(1, mid);
+                ResultSet rs = stmt.executeQuery();
+                if (!rs.next()) {
+                    rs.close();
+                    stmt.close();
+                    return 0;
+                }
+                String pw = rs.getString(1);
+                return pw.equals(hash(auth.getPassword(), mid)) ? mid : 0;
+            } else if (b2) {
+                String sql = "select mid from user_auth where qq = ?";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setString(1, auth.getQq());
+                ResultSet rs = stmt.executeQuery();
+                if (!rs.next()) {
+                    rs.close();
+                    stmt.close();
+                    return 0;
+                } else {
+                    return rs.getLong(1);
+                }
+            } else {
+                String sql = "select mid from user_auth where wechat = ?";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setString(1, auth.getWechat());
+                ResultSet rs = stmt.executeQuery();
+                if (!rs.next()) {
+                    rs.close();
+                    stmt.close();
+                    return 0;
+                } else {
+                    return rs.getLong(1);
+                }
             }
-            // true info(after hash)
-            String pw0 = rs.getString(1);
-            String qq0 = rs.getString(2);
-            String wechat0 = rs.getString(3);
-            // auth info(before hash)
-            String pw = auth.getPassword();
-            String qq = auth.getQq();
-            String wechat = auth.getWechat();
-
-            if ((pw == null || pw.equals("")) &&
-                    (qq == null || qq.equals("")) &&
-                    (wechat == null || wechat.equals(""))) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
-
-            if (pw != null && !pw.equals("") && !hash(pw, mid).equals(pw0)) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            if (qq != null && !qq.equals("") && !qq.equals(qq0)) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            if (wechat != null && !wechat.equals("") && !wechat.equals(wechat0)) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
-            rs.close();
-            stmt.close();
-            return true;
         } catch (Exception e) {
             System.out.println(e.getMessage());
-            return false;
+            return 0;
         }
     }
 
