@@ -38,6 +38,7 @@ public class RecommenderServiceImpl implements RecommenderService {
             stmt1.setString(1, bv);
             ResultSet rs = stmt1.executeQuery();
             if (!rs.next()) {
+                rs.close();
                 return null;
             }
             rs.close();
@@ -65,47 +66,48 @@ public class RecommenderServiceImpl implements RecommenderService {
     @Override
     public List<String> generalRecommendations(int pageSize, int pageNum) {
         if (pageSize < 1 || pageNum < 1) return null;
-        String sql = "select view_cnt.bv,\n" +
-                "       count_view,\n" +
-                "       count_like,\n" +
-                "       count_coin,\n" +
-                "       count_fav,\n" +
-                "       count_danmu,\n" +
-                "       count_fin,\n" +
+        String sql ="select view_cnt.bv,\n" +
                 "       case\n" +
                 "           when count_view = 0 then 0\n" +
                 "           else\n" +
                 "                   case\n" +
+                "                       when count_like is null then 0\n" +
                 "                       when cast(count_like as float) / cast(count_view as float) > 1 then 1\n" +
                 "                       else cast(count_like as float) / cast(count_view as float) end +\n" +
                 "                   case\n" +
+                "                       when count_coin is null then 0\n" +
                 "                       when cast(count_coin as float) / cast(count_view as float) > 1 then 1\n" +
                 "                       else cast(count_coin as float) / cast(count_view as float) end +\n" +
                 "                   case\n" +
+                "                       when count_fav is null then 0\n" +
                 "                       when cast(count_fav as float) / cast(count_view as float) > 1 then 1\n" +
                 "                       else cast(count_fav as float) / cast(count_view as float) end +\n" +
                 "                   case\n" +
+                "                       when count_danmu is null then 0\n" +
                 "                       when cast(count_danmu as float) / cast(count_view as float) > 1 then 1\n" +
                 "                       else cast(count_danmu as float) / cast(count_view as float) end +\n" +
                 "                   case\n" +
-                "                       when cast(count_fin as float) / (cast(count_view as float) *cast(duration as float))  > 1 then 1\n" +
-                "                       else cast(count_fin as float) / (cast(count_view as float) *cast(duration as float)) end end as rate\n" +
-                "from (select bv, count(*)as count_view  from view_video group by bv) view_cnt\n" +
-                "         join(select bv, count(*) as count_like\n" +
+                "                       when count_fin is null then 0\n" +
+                "                       when cast(count_fin as float) / (cast(count_view as float) * cast(duration as float)) > 1 then 1\n" +
+                "                       else cast(count_fin as float) /\n" +
+                "                            (cast(count_view as float) * cast(duration as float)) end end as rate\n" +
+                "from (select bv, count(*) as count_view from view_video group by bv) view_cnt\n" +
+                "         left join(select bv, count(*) as count_like\n" +
                 "              from like_video\n" +
                 "              group by bv) like_cnt on view_cnt.bv = like_cnt.bv\n" +
-                "         join (select bv, count(*) as count_coin\n" +
+                "         left join (select bv, count(*) as count_coin\n" +
                 "               from coin_video\n" +
                 "               group by bv) coin_cnt on view_cnt.bv = coin_cnt.bv\n" +
-                "         join (select bv, count(*) as count_fav\n" +
+                "         left join (select bv, count(*) as count_fav\n" +
                 "               from fav_video\n" +
                 "               group by bv) fav_cnt on view_cnt.bv = fav_cnt.bv\n" +
-                "         join (select bv, count(*) as count_danmu\n" +
+                "         left join (select bv, count(*) as count_danmu\n" +
                 "               from danmu_info\n" +
                 "               group by bv) dannmu_cnt on view_cnt.bv = dannmu_cnt.bv\n" +
-                "         join (select vv.bv, vi.duration as duration ,sum(vv.time) as count_fin\n" +
-                "               from view_video vv join video_info vi on vv.bv = vi.bv\n" +
-                "               group by vv.bv ,vi.bv) fin_cnt on view_cnt.bv = fin_cnt.bv\n" +
+                "         left join (select vv.bv, vi.duration as duration, sum(vv.time) as count_fin\n" +
+                "               from view_video vv\n" +
+                "                        join video_info vi on vv.bv = vi.bv\n" +
+                "               group by vv.bv, vi.bv) fin_cnt on view_cnt.bv = fin_cnt.bv\n" +
                 "order by rate desc;";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -125,40 +127,44 @@ public class RecommenderServiceImpl implements RecommenderService {
     public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
         long auth_mid = Authentication.authentication(auth, dataSource);
         if (pageSize <= 0 || pageNum <= 0 || auth_mid == 0) return null;
-        String sql1 = "select up_mid,fans_mid from follow where up_mid = ? intersect select up_mid,fans_mid from follow where fans_mid = ?";
+        String sql1 = "select up_mid, fans_mid as friends_mid from follow where (up_mid,fans_mid) in (select fans_mid,up_mid  from follow) and up_mid = ?;";
         String sql2 = "select v.bv, count(*) as cnt\n" +
                 "from view_video v\n" +
                 "         join (select up_mid, fans_mid as friends_mid\n" +
                 "               from follow\n" +
-                "               where (fans_mid, up_mid) in (select up_mid, fans_mid from follow)\n" +
+                "               where (up_mid,fans_mid) in (select fans_mid,up_mid  from follow)\n" +
                 "                 and up_mid = ?) f on f.friends_mid = v.mid\n" +
                 "         join video_info i on v.bv = i.bv\n" +
                 "         join user_info ui on i.owner_mid = ui.mid\n" +
-                "where (v.bv, f.up_mid) not in (select bv, mid from view_video where mid = ?) and i.can_see = true and ? >= i.public_time\n" +
+                "where (v.bv, f.up_mid) not in (select bv, mid from view_video where mid = ?)\n" +
+                "  and i.can_see = true\n" +
                 "group by v.bv, ui.level, i.public_time\n" +
-                "order by cnt desc, ui.level, i.public_time;";
+                "order by cnt desc, ui.level desc, i.public_time desc;";
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql1)) {
+             PreparedStatement stmt = conn.prepareStatement(sql1);
+             PreparedStatement stmt2 = conn.prepareStatement(sql2)
+             ) {
             stmt.setLong(1, auth_mid);
-            stmt.setLong(2, auth_mid);
-            ResultSet rs = stmt.executeQuery();
-            if (!rs.next()) {
+            ResultSet rs1 = stmt.executeQuery();
+            if (!rs1.next()) {
+                rs1.close();
                 return generalRecommendations(pageSize, pageNum);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql2)) {
+            rs1.close();
             List<String> result = new ArrayList<>();
-            stmt.setLong(1, auth_mid);
-            stmt.setLong(2, auth_mid);
-            stmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
-            ResultSet rs = stmt.executeQuery();
-            for (int i = 1; i <= pageNum * pageSize; i++){
-                if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getString("bv"));
+            stmt2.setLong(1, auth_mid);
+            stmt2.setLong(2, auth_mid);
+            ResultSet rs2 = stmt2.executeQuery();
+            if (!rs2.next()) {
+                rs2.close();
+                return generalRecommendations(pageSize,pageNum);
+            }else if (1 > pageSize * (pageNum - 1)){
+                result.add(rs2.getString("bv"));
             }
-            rs.close();
+            for (int i = 2; i <= pageNum * pageSize; i++){
+                if (rs2.next() && i > pageSize * (pageNum - 1)) result.add(rs2.getString("bv"));
+            }
+            rs2.close();
             return result;
         } catch (Exception e) {
             e.printStackTrace();
