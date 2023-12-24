@@ -35,6 +35,9 @@ public class UserServiceImpl implements UserService {
                 return -1;
             }
 
+            if (req.getWechat() == null || req.getWechat().equals("")) {
+
+            }
             String sql2 = "select * from user_auth where qq = ? or wechat = ?";
             PreparedStatement stmt = conn.prepareStatement(sql2);
             stmt.setString(1, req.getQq());
@@ -155,6 +158,9 @@ public class UserServiceImpl implements UserService {
     public boolean follow(AuthInfo auth, long followeeMid) {
         long auth_mid = Authentication.authentication(auth, dataSource);
         if (auth_mid == 0){
+            return false;
+        }
+        if (auth_mid == followeeMid) {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {

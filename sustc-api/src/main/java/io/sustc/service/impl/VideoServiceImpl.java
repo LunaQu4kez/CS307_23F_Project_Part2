@@ -71,6 +71,7 @@ public class VideoServiceImpl implements VideoService {
             return bv;
         } catch (Exception e) {
             e.printStackTrace();
+            System.out.println("+++++++++++++++++++++++++");
             return null;
         }
     }
@@ -214,14 +215,14 @@ public class VideoServiceImpl implements VideoService {
                 boolean canSee = rs.getBoolean(5);
                 Timestamp publicTime = rs.getTimestamp(6);
                 if (identity.equals("user") && (!canSee || now.before(publicTime))) {
-                    continue;
+                    //continue;
                 }
                 String[] words = keywords.split(" ");
                 int cnt = 0;
                 for (int i = 0; i < words.length; i++) {
-                    cnt += cntStr(title, words[i]);
-                    cnt += cntStr(description, words[i]);
-                    cnt += cntStr(name, words[i]);
+                    if (title.toLowerCase().contains(words[i].toLowerCase())) cnt++;
+                    if (description.toLowerCase().contains(words[i].toLowerCase())) cnt++;
+                    if (name.toLowerCase().contains(words[i].toLowerCase())) cnt++;
                 }
                 if (cnt > 0) {
                     match.put(bv, cnt);
