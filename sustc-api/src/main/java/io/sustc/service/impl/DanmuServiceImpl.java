@@ -90,7 +90,7 @@ public class DanmuServiceImpl implements DanmuService {
             stmt1.close();
             return result > 0 ? this_id : -1;
         }catch (Exception e) {
-            e.printStackTrace();
+            //e.printStackTrace();
             return id + 1;
         }
     }
