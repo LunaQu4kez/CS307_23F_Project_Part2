@@ -21,6 +21,8 @@ dependencies {
 
     implementation(platform("org.springframework.shell:spring-shell-dependencies:2.1.13"))
     implementation("org.springframework.shell:spring-shell-starter")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.5.21")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.5.21")
 }
 
 tasks.withType<JavaExec> {
