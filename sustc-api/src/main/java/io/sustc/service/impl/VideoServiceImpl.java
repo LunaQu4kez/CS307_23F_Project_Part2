@@ -21,6 +21,7 @@ public class VideoServiceImpl implements VideoService {
     @Autowired
     private DataSource dataSource;
 
+    // toDo: debug
     @Override
     public String postVideo(AuthInfo auth, PostVideoReq req) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -31,7 +32,7 @@ public class VideoServiceImpl implements VideoService {
         try (Connection conn = dataSource.getConnection()) {
             Timestamp ts = new Timestamp(System.currentTimeMillis());
             if (req.getTitle() == null || req.getTitle().equals("") || req.getDuration() < 10
-                || ts.after(req.getPublicTime())) {
+                || req.getPublicTime() == null || ts.after(req.getPublicTime())) {
                 return null;
             }
             String sql1 = "select * from video_info where title = ? and owner_mid = ?";
@@ -61,7 +62,7 @@ public class VideoServiceImpl implements VideoService {
             stmt.setFloat(3, req.getDuration());
             stmt.setString(4, req.getDescription());
             stmt.setLong(5, auth_mid);
-            stmt.setTimestamp(6, ts);
+            stmt.setTimestamp(6, new Timestamp(System.currentTimeMillis()));
             stmt.setTimestamp(7, req.getPublicTime());
             stmt.executeUpdate();
 
@@ -74,6 +75,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -116,6 +118,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -145,7 +148,7 @@ public class VideoServiceImpl implements VideoService {
 
             Timestamp now = new Timestamp(System.currentTimeMillis());
             if (req.getTitle() == null || req.getTitle().equals("") || req.getDuration() < 10
-                    || now.after(req.getPublicTime())) {
+                    || req.getPublicTime() == null || now.after(req.getPublicTime())) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -176,6 +179,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // toDo: debug
     @Override
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -215,12 +219,14 @@ public class VideoServiceImpl implements VideoService {
                 String[] words = keywords.split(" ");
                 int cnt = 0;
                 for (int i = 0; i < words.length; i++) {
-                    if (title.contains(words[i])) cnt++;
-                    if (description.contains(words[i])) cnt++;
-                    if (name.contains(words[i])) cnt++;
+                    cnt += cntStr(title, words[i]);
+                    cnt += cntStr(description, words[i]);
+                    cnt += cntStr(name, words[i]);
                 }
-                match.put(bv, cnt);
-                bvs.add(bv);
+                if (cnt > 0) {
+                    match.put(bv, cnt);
+                    bvs.add(bv);
+                }
             }
 
             String sql2 = "select bv, count(mid) from view_video group by bv";
@@ -255,6 +261,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public double getAverageViewRate(String bv) {
         try (Connection conn = dataSource.getConnection()) {
@@ -298,6 +305,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public Set<Integer> getHotspot(String bv) {
         Set<Integer> set = new HashSet<>();
@@ -312,7 +320,7 @@ public class VideoServiceImpl implements VideoService {
                 return set;
             }
             double duration = rs.getDouble(1);
-            System.out.println("duration = " + duration);
+            //System.out.println("duration = " + duration);
 
             String sql2 = "select count(*) from danmu_info where bv = ?";
             stmt = conn.prepareStatement(sql2);
@@ -337,7 +345,7 @@ public class VideoServiceImpl implements VideoService {
                 maxCnt = Math.max(maxCnt, cnt[(int)(time / 10)]);
             }
             for (int i = 0; i < cnt.length; i++) {
-                System.out.println("cnt[" + i + "] = " + cnt[i]);
+                //System.out.println("cnt[" + i + "] = " + cnt[i]);
                 if (cnt[i] == maxCnt) set.add(i);
             }
             return set;
@@ -347,6 +355,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public boolean reviewVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -398,6 +407,7 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public boolean coinVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -473,10 +483,13 @@ public class VideoServiceImpl implements VideoService {
         }
     }
 
+    // accept
     @Override
     public boolean likeVideo(AuthInfo auth, String bv) {
+        //boolean b = auth.getMid() == 596082;
         long auth_mid = Authentication.authentication(auth, dataSource);
         if (auth_mid == 0){
+            //System.out.println("111111111111111111111111111111");
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -487,6 +500,7 @@ public class VideoServiceImpl implements VideoService {
             if (!rs.next()) {
                 rs.close();
                 stmt.close();
+                //System.out.println("222222222222222222222222222");
                 return false;
             }
             long ownerMid = rs.getLong(1);
@@ -500,11 +514,12 @@ public class VideoServiceImpl implements VideoService {
             rs.next();
             String identity = rs.getString(1);
 
-            if (auth_mid == ownerMid) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
+//            if (auth_mid == ownerMid) {
+//                rs.close();
+//                stmt.close();
+//                System.out.println("333333333333333333333333333333");
+//                return false;
+//            }
             if ((identity.equals("user") && canSee && new Timestamp(System.currentTimeMillis()).after(publicTime)) ||
                     (identity.equals("superuser"))) {
                 String sql3 = "select * from like_video where mid = ? and bv = ?";
@@ -513,28 +528,35 @@ public class VideoServiceImpl implements VideoService {
                 stmt.setString(2, bv);
                 rs = stmt.executeQuery();
                 if (rs.next()) {
-                    rs.close();
-                    stmt.close();
-                    return false;
+                    String sql4 = "delete from like_video where bv = ? and mid = ?";
+                    stmt = conn.prepareStatement(sql4);
+                    stmt.setString(1, bv);
+                    stmt.setLong(2, auth_mid);
+                    //System.out.println("----------------------");
+                    return stmt.executeUpdate() == 0;
+                } else {
+                    String sql4 = "insert into like_video (bv, mid) values (?, ?)";
+                    stmt = conn.prepareStatement(sql4);
+                    stmt.setString(1, bv);
+                    stmt.setLong(2, auth_mid);
+                    //System.out.println("+++++++++++++++++++++++");
+                    return stmt.executeUpdate() != 0;
                 }
-
-                String sql4 = "insert into like_video (bv, mid) values (?, ?)";
-                stmt = conn.prepareStatement(sql4);
-                stmt.setString(1, bv);
-                stmt.setLong(2, auth_mid);
-                return stmt.executeUpdate() != 0;
             } else {
                 rs.close();
                 stmt.close();
+                //System.out.println("555555555555555555555555555555555555");
                 return false;
             }
 
         } catch (Exception e) {
             e.printStackTrace();
+            //System.out.println("6666666666666666666666666666666666666666");
             return false;
         }
     }
 
+    // accept
     @Override
     public boolean collectVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
@@ -562,11 +584,11 @@ public class VideoServiceImpl implements VideoService {
             rs.next();
             String identity = rs.getString(1);
 
-            if (auth_mid == ownerMid) {
-                rs.close();
-                stmt.close();
-                return false;
-            }
+//            if (auth_mid == ownerMid) {
+//                rs.close();
+//                stmt.close();
+//                return false;
+//            }
             if ((identity.equals("user") && canSee && new Timestamp(System.currentTimeMillis()).after(publicTime)) ||
                     (identity.equals("superuser"))) {
                 String sql3 = "select * from fav_video where mid = ? and bv = ?";
@@ -575,16 +597,18 @@ public class VideoServiceImpl implements VideoService {
                 stmt.setString(2, bv);
                 rs = stmt.executeQuery();
                 if (rs.next()) {
-                    rs.close();
-                    stmt.close();
-                    return false;
+                    String sql4 = "delete from fav_video where bv = ? and mid = ?";
+                    stmt = conn.prepareStatement(sql4);
+                    stmt.setString(1, bv);
+                    stmt.setLong(2, auth_mid);
+                    return stmt.executeUpdate() == 0;
+                } else {
+                    String sql4 = "insert into fav_video (bv, mid) values (?, ?)";
+                    stmt = conn.prepareStatement(sql4);
+                    stmt.setString(1, bv);
+                    stmt.setLong(2, auth_mid);
+                    return stmt.executeUpdate() != 0;
                 }
-
-                String sql4 = "insert into fav_video (bv, mid) values (?, ?)";
-                stmt = conn.prepareStatement(sql4);
-                stmt.setString(1, bv);
-                stmt.setLong(2, auth_mid);
-                return stmt.executeUpdate() != 0;
             } else {
                 rs.close();
                 stmt.close();
@@ -646,4 +670,13 @@ public class VideoServiceImpl implements VideoService {
         return String.join("", tmp);
     }
 
+    private static int cntStr(String str, String mode) {
+        int cnt = 0;
+        for (int i = 0; i < str.length() - mode.length() + 1; i++) {
+            if (mode.equals(str.substring(i, i + mode.length()))) {
+                cnt++;
+            }
+        }
+        return cnt;
+    }
 }
