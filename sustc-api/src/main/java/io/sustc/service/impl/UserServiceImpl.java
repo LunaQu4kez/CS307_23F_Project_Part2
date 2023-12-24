@@ -15,6 +15,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -27,17 +29,15 @@ public class UserServiceImpl implements UserService {
     public long register(RegisterUserReq req) {
         try (Connection conn = dataSource.getConnection()) {
             if (req.getPassword() == null || req.getName() == null || req.getSex() == null
-            || req.getPassword().equals("") || req.getName().equals("")){
+                    || req.getPassword().equals("") || req.getName().equals("")){
                 return -1;
             }
-            if (req.getBirthday() != null && !req.getBirthday().isEmpty() &&
-                    !req.getBirthday().matches("\\d{1,2}月\\d{1,2}日")){
-                return -1;
+            if (req.getBirthday() != null && !req.getBirthday().isEmpty()){
+                if (!BirthdayValid(req.getBirthday())){
+                    return -1;
+                }
             }
 
-            if (req.getWechat() == null || req.getWechat().equals("")) {
-
-            }
             String sql2 = "select * from user_auth where qq = ? or wechat = ?";
             PreparedStatement stmt = conn.prepareStatement(sql2);
             stmt.setString(1, req.getQq());
@@ -292,5 +292,24 @@ public class UserServiceImpl implements UserService {
             e.printStackTrace();
             return null;
         }
+    }
+    public static boolean BirthdayValid(String birthday){
+        Pattern pattern = Pattern.compile("(\\d{1,2})月(\\d{1,2})日");
+        Matcher matcher = pattern.matcher(birthday);
+        if (matcher.matches()) {
+            int month = Integer.parseInt(matcher.group(1));
+            int day = Integer.parseInt(matcher.group(2));
+            if (month > 12 || day > 31 ) {
+                return false;
+            }
+            if ((month == 4 || month == 6 || month == 9 || month == 11) && day > 30){
+                return false;
+            }
+            if (month == 2 && day > 28){
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 }
