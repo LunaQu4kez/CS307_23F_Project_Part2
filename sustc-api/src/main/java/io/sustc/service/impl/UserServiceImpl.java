@@ -38,15 +38,29 @@ public class UserServiceImpl implements UserService {
                 }
             }
 
-            String sql2 = "select * from user_auth where qq = ? or wechat = ?";
-            PreparedStatement stmt = conn.prepareStatement(sql2);
-            stmt.setString(1, req.getQq());
-            stmt.setString(2, req.getWechat());
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()){
-                stmt.close();
-                rs.close();
-                return -1;
+            PreparedStatement stmt;
+            ResultSet rs;
+            if (req.getQq() != null && !req.getQq().equals("")) {
+                String sql2 = "select * from user_auth where qq = ?";
+                stmt = conn.prepareStatement(sql2);
+                stmt.setString(1, req.getQq());
+                rs = stmt.executeQuery();
+                if (rs.next()){
+                    stmt.close();
+                    rs.close();
+                    return -1;
+                }
+            }
+            if (req.getWechat() != null && !req.getWechat().equals("")) {
+                String sql2 = "select * from user_auth where wechat = ?";
+                stmt = conn.prepareStatement(sql2);
+                stmt.setString(1, req.getWechat());
+                rs = stmt.executeQuery();
+                if (rs.next()){
+                    stmt.close();
+                    rs.close();
+                    return -1;
+                }
             }
 
             String sql3 = "select * from max_mid ";
