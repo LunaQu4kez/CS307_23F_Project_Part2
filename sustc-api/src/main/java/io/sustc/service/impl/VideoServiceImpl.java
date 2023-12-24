@@ -37,7 +37,7 @@ public class VideoServiceImpl implements VideoService {
             String sql1 = "select * from video_info where title = ? and owner_mid = ?";
             PreparedStatement stmt = conn.prepareStatement(sql1);
             stmt.setString(1, req.getTitle());
-            stmt.setLong(2, auth.getMid());
+            stmt.setLong(2, auth_mid);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 rs.close();
@@ -60,7 +60,7 @@ public class VideoServiceImpl implements VideoService {
             stmt.setString(2, req.getTitle());
             stmt.setFloat(3, req.getDuration());
             stmt.setString(4, req.getDescription());
-            stmt.setLong(5, auth.getMid());
+            stmt.setLong(5, auth_mid);
             stmt.setTimestamp(6, ts);
             stmt.setTimestamp(7, req.getPublicTime());
             stmt.executeUpdate();
@@ -96,11 +96,11 @@ public class VideoServiceImpl implements VideoService {
 
             String sql2 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             rs = stmt.executeQuery();
             rs.next();
             String identity = rs.getString(1);
-            if (!identity.equals("superuser") && owner_mid != auth.getMid()) {
+            if (!identity.equals("superuser") && owner_mid != auth_mid) {
                 stmt.close();
                 rs.close();
                 return false;
@@ -137,7 +137,7 @@ public class VideoServiceImpl implements VideoService {
             String description = rs.getString(3);
             double duration = rs.getDouble(4);
             Timestamp publicTime = rs.getTimestamp(5);
-            if (ownerMid != auth.getMid()) {
+            if (ownerMid != auth_mid) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -193,7 +193,7 @@ public class VideoServiceImpl implements VideoService {
 
             String sql0 = "select identity from user_info where mid = ?";
             PreparedStatement stmt = conn.prepareStatement(sql0);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             ResultSet rs = stmt.executeQuery();
             rs.next();
             String identity = rs.getString(1);
@@ -365,7 +365,7 @@ public class VideoServiceImpl implements VideoService {
             }
             long ownerMid = rs.getLong(1);
             boolean canSee = rs.getBoolean(2);
-            if (ownerMid == auth.getMid() || canSee) {
+            if (ownerMid == auth_mid || canSee) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -373,7 +373,7 @@ public class VideoServiceImpl implements VideoService {
 
             String sql2 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             rs = stmt.executeQuery();
             rs.next();
             String identity = rs.getString(1);
@@ -386,7 +386,7 @@ public class VideoServiceImpl implements VideoService {
             String sql3 = "update video_info set reviewer_mid = ?, review_time = ?, can_see = true" +
                     " where bv = ?";
             stmt = conn.prepareStatement(sql3);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             stmt.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
             stmt.setString(3, bv);
             int x = stmt.executeUpdate();
@@ -420,13 +420,13 @@ public class VideoServiceImpl implements VideoService {
 
             String sql2 = "select identity, coin from user_info where mid = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             rs = stmt.executeQuery();
             rs.next();
             String identity = rs.getString(1);
             int coin = rs.getInt(2);
 
-            if (auth.getMid() == ownerMid) {
+            if (auth_mid == ownerMid) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -435,7 +435,7 @@ public class VideoServiceImpl implements VideoService {
                     (identity.equals("superuser"))) {
                 String sql3 = "select * from coin_video where mid = ? and bv = ?";
                 stmt = conn.prepareStatement(sql3);
-                stmt.setLong(1, auth.getMid());
+                stmt.setLong(1, auth_mid);
                 stmt.setString(2, bv);
                 rs = stmt.executeQuery();
                 if (rs.next() || coin == 0) {
@@ -447,7 +447,7 @@ public class VideoServiceImpl implements VideoService {
                 String sql4 = "insert into coin_video (bv, mid) values (?, ?)";
                 stmt = conn.prepareStatement(sql4);
                 stmt.setString(1, bv);
-                stmt.setLong(2, auth.getMid());
+                stmt.setLong(2, auth_mid);
                 int x =  stmt.executeUpdate();
                 if (x == 0) {
                     rs.close();
@@ -458,7 +458,7 @@ public class VideoServiceImpl implements VideoService {
                 String sql5 = "update user_info set coin = ? where mid = ?";
                 stmt = conn.prepareStatement(sql5);
                 stmt.setInt(1, coin - 1);
-                stmt.setLong(2, auth.getMid());
+                stmt.setLong(2, auth_mid);
                 stmt.executeUpdate();
                 return true;
             } else {
@@ -495,12 +495,12 @@ public class VideoServiceImpl implements VideoService {
 
             String sql2 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             rs = stmt.executeQuery();
             rs.next();
             String identity = rs.getString(1);
 
-            if (auth.getMid() == ownerMid) {
+            if (auth_mid == ownerMid) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -509,7 +509,7 @@ public class VideoServiceImpl implements VideoService {
                     (identity.equals("superuser"))) {
                 String sql3 = "select * from like_video where mid = ? and bv = ?";
                 stmt = conn.prepareStatement(sql3);
-                stmt.setLong(1, auth.getMid());
+                stmt.setLong(1, auth_mid);
                 stmt.setString(2, bv);
                 rs = stmt.executeQuery();
                 if (rs.next()) {
@@ -521,7 +521,7 @@ public class VideoServiceImpl implements VideoService {
                 String sql4 = "insert into like_video (bv, mid) values (?, ?)";
                 stmt = conn.prepareStatement(sql4);
                 stmt.setString(1, bv);
-                stmt.setLong(2, auth.getMid());
+                stmt.setLong(2, auth_mid);
                 return stmt.executeUpdate() != 0;
             } else {
                 rs.close();
@@ -557,12 +557,12 @@ public class VideoServiceImpl implements VideoService {
 
             String sql2 = "select identity from user_info where mid = ?";
             stmt = conn.prepareStatement(sql2);
-            stmt.setLong(1, auth.getMid());
+            stmt.setLong(1, auth_mid);
             rs = stmt.executeQuery();
             rs.next();
             String identity = rs.getString(1);
 
-            if (auth.getMid() == ownerMid) {
+            if (auth_mid == ownerMid) {
                 rs.close();
                 stmt.close();
                 return false;
@@ -571,7 +571,7 @@ public class VideoServiceImpl implements VideoService {
                     (identity.equals("superuser"))) {
                 String sql3 = "select * from fav_video where mid = ? and bv = ?";
                 stmt = conn.prepareStatement(sql3);
-                stmt.setLong(1, auth.getMid());
+                stmt.setLong(1, auth_mid);
                 stmt.setString(2, bv);
                 rs = stmt.executeQuery();
                 if (rs.next()) {
@@ -583,7 +583,7 @@ public class VideoServiceImpl implements VideoService {
                 String sql4 = "insert into fav_video (bv, mid) values (?, ?)";
                 stmt = conn.prepareStatement(sql4);
                 stmt.setString(1, bv);
-                stmt.setLong(2, auth.getMid());
+                stmt.setLong(2, auth_mid);
                 return stmt.executeUpdate() != 0;
             } else {
                 rs.close();
