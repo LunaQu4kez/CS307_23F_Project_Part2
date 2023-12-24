@@ -176,13 +176,14 @@ public class RecommenderServiceImpl implements RecommenderService {
     public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
         long auth_mid = Authentication.authentication(auth, dataSource);
         if (pageSize <= 0 || pageNum <= 0 || auth_mid == 0) return null;
-        String sql = "select count(*) as cnt, af.up_mid as rec " +
-                "from (select up_mid, fans_mid from follow where fans_mid = ?) af " +
-                "join (select up_mid, fans_mid from follow where fans_mid <> ?) bf " +
-                "on af.up_mid = bf.up_mid " +
-                "join user_info on af.up_mid = user_info.mid " +
-                "where (bf.fans_mid, af.fans_mid) not in (select up_mid, fans_mid from follow where fans_mid = ?) " +
-                "group by af.up_mid, level order by cnt desc, level desc, rec asc";
+        String sql = "select count(*) as cnt, bf.fans_mid as rec\n" +
+                "from (select up_mid, fans_mid from follow where fans_mid = ?) af\n" +
+                "         join (select up_mid, fans_mid from follow where fans_mid <> ?) bf\n" +
+                "              on af.up_mid = bf.up_mid\n" +
+                "         join user_info on bf.fans_mid = user_info.mid\n" +
+                "where (bf.fans_mid, af.fans_mid) not in (select up_mid, fans_mid from follow where fans_mid = ?)\n" +
+                "group by bf.fans_mid, level\n" +
+                "order by cnt desc, level desc, rec asc;";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             List<Long> result = new ArrayList<>();
@@ -190,8 +191,9 @@ public class RecommenderServiceImpl implements RecommenderService {
             stmt.setLong(2, auth_mid);
             stmt.setLong(3, auth_mid);
             ResultSet rs = stmt.executeQuery();
-            for (int i = 1; i <= pageNum * pageSize; i++)
+            for (int i = 1; i <= pageNum * pageSize; i++){
                 if (rs.next() && i > pageSize * (pageNum - 1)) result.add(rs.getLong("rec"));
+            }
             rs.close();
             return result;
         } catch (Exception e) {
