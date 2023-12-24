@@ -25,14 +25,14 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public String postVideo(AuthInfo auth, PostVideoReq req) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return null;
         }
 
         try (Connection conn = dataSource.getConnection()) {
             Timestamp ts = new Timestamp(System.currentTimeMillis());
             if (req.getTitle() == null || req.getTitle().equals("") || req.getDuration() < 10
-                || req.getPublicTime() == null || ts.after(req.getPublicTime())) {
+                    || req.getPublicTime() == null || ts.after(req.getPublicTime())) {
                 return null;
             }
             String sql1 = "select * from video_info where title = ? and owner_mid = ?";
@@ -80,7 +80,7 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -123,7 +123,7 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -184,82 +184,58 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return null;
         }
         if (keywords == null || keywords.equals("") || pageSize <= 0 || pageNum <= 0) {
             return null;
         }
-        try (Connection conn = dataSource.getConnection()) {
-            List<String> bvs = new ArrayList<>();
-            Map<String, Integer> match = new HashMap<>();
-            Map<String, Integer> watch = new HashMap<>();
-            Timestamp now = new Timestamp(System.currentTimeMillis());
-
-            String sql0 = "select identity from user_info where mid = ?";
-            PreparedStatement stmt = conn.prepareStatement(sql0);
-            stmt.setLong(1, auth_mid);
+        String[] keyWords = keywords.split(" ");
+        for (int i = 0; i < keyWords.length; i++) {
+            String[] word = (keyWords[i] + "!").split("\\\\");
+            keyWords[i] = word[0];
+            for (int j = 1; j < word.length; j++) {
+                keyWords[i] = keyWords[i] + "\\\\" + word[j];
+            }
+            keyWords[i] = keyWords[i].substring(0, keyWords[i].length() - 1);
+        }
+        for (int i = 0; i < keyWords.length; i++) {
+            String[] word = (keyWords[i] + "!").split("%");
+            keyWords[i] = word[0];
+            for (int j = 1; j < word.length; j++) {
+                keyWords[i] = keyWords[i] + "\\%" + word[j];
+            }
+            keyWords[i] = keyWords[i].substring(0, keyWords[i].length() - 1);
+        }
+        String sql = "SELECT video_info.bv, vv.cnt,";
+        for (int i = 0; i < keyWords.length; i++) {
+            String str = "CASE WHEN video_info.title iLIKE '%" + keyWords[i] + "%' THEN 1 ELSE 0 END + CASE WHEN user_info.name iLIKE '%" + keyWords[i] + "%' THEN 1 ELSE 0 END + CASE WHEN video_info.description iLIKE '%" + keyWords[i] + "%' THEN 1 ELSE 0 END ";
+            if (i == keyWords.length - 1) {
+                sql = sql + str;
+            } else {
+                sql = sql + str + "+";
+            }
+        }
+        sql = sql + "AS count\n" +
+                "FROM video_info\n" +
+                "         JOIN\n" +
+                "     user_info ON video_info.owner_mid = user_info.mid\n" +
+                "         join (select bv, count(*) as cnt from view_video group by view_video.bv) vv on vv.bv = video_info.bv\n" +
+                "group by video_info.bv, vv.cnt, video_info.title, user_info.name, video_info.description\n" +
+                "order by count desc, vv.cnt desc;";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             ResultSet rs = stmt.executeQuery();
-            rs.next();
-            String identity = rs.getString(1);
-
-            String sql1 = "select bv, title, description, name, can_see, public_time " +
-                    "from video_info join user_info on mid = owner_mid";
-            stmt = conn.prepareStatement(sql1);
-            rs = stmt.executeQuery();
-            while (rs.next()) {
-                String bv = rs.getString(1);
-                String title = rs.getString(2);
-                String description = rs.getString(3);
-                String name = rs.getString(4);
-                boolean canSee = rs.getBoolean(5);
-                Timestamp publicTime = rs.getTimestamp(6);
-                if (identity.equals("user") && (!canSee || now.before(publicTime))) {
-                    //continue;
-                }
-                String[] words = keywords.split(" ");
-                int cnt = 0;
-                for (int i = 0; i < words.length; i++) {
-                    if (title.toLowerCase().contains(words[i].toLowerCase())) cnt++;
-                    if (description.toLowerCase().contains(words[i].toLowerCase())) cnt++;
-                    if (name.toLowerCase().contains(words[i].toLowerCase())) cnt++;
-                }
-                if (cnt > 0) {
-                    match.put(bv, cnt);
-                    bvs.add(bv);
-                }
+            ArrayList<String> result = new ArrayList<>();
+            for (int i = 1; i <= pageNum * pageSize; i++) {
+                if (rs.next() && i > pageSize * (pageNum - 1) && rs.getInt("count") > 0) result.add(rs.getString("bv"));
             }
-
-            String sql2 = "select bv, count(mid) from view_video group by bv";
-            stmt = conn.prepareStatement(sql2);
-            rs = stmt.executeQuery();
-            while (rs.next()) {
-                String bv = rs.getString(1);
-                int cnt = rs.getInt(2);
-                watch.put(bv, cnt);
-            }
-
             rs.close();
-            stmt.close();
-
-            bvs.sort(new Comparator<String>() {
-                @Override
-                public int compare(String o1, String o2) {
-                    if (!Objects.equals(match.get(o1), match.get(o2)))
-                        return -match.get(o1) + match.get(o2);
-                    else return -watch.getOrDefault(o1, 0) + watch.getOrDefault(o2, 0);
-                }
-            });
-
-            List<String> ans = new ArrayList<>();
-            for (int i = (pageNum - 1) * pageSize; i < Math.min(pageNum * pageSize, bvs.size()); i++) {
-                ans.add(bvs.get(i));
-            }
-            return ans;
+            return result;
         } catch (Exception e) {
             e.printStackTrace();
-            return null;
         }
+        return null;
     }
 
     // accept
@@ -334,7 +310,7 @@ public class VideoServiceImpl implements VideoService {
                 return set;
             }
 
-            int[] cnt = new int[(int)(duration / 10) + 1];
+            int[] cnt = new int[(int) (duration / 10) + 1];
             int maxCnt = 0;
             String sql3 = "select time from danmu_info where bv = ?";
             stmt = conn.prepareStatement(sql3);
@@ -342,8 +318,8 @@ public class VideoServiceImpl implements VideoService {
             rs = stmt.executeQuery();
             while (rs.next()) {
                 double time = rs.getDouble(1);
-                cnt[(int)(time / 10)]++;
-                maxCnt = Math.max(maxCnt, cnt[(int)(time / 10)]);
+                cnt[(int) (time / 10)]++;
+                maxCnt = Math.max(maxCnt, cnt[(int) (time / 10)]);
             }
             for (int i = 0; i < cnt.length; i++) {
                 //System.out.println("cnt[" + i + "] = " + cnt[i]);
@@ -360,7 +336,7 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public boolean reviewVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -412,7 +388,7 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public boolean coinVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
@@ -459,7 +435,7 @@ public class VideoServiceImpl implements VideoService {
                 stmt = conn.prepareStatement(sql4);
                 stmt.setString(1, bv);
                 stmt.setLong(2, auth_mid);
-                int x =  stmt.executeUpdate();
+                int x = stmt.executeUpdate();
                 if (x == 0) {
                     rs.close();
                     stmt.close();
@@ -489,7 +465,7 @@ public class VideoServiceImpl implements VideoService {
     public boolean likeVideo(AuthInfo auth, String bv) {
         //boolean b = auth.getMid() == 596082;
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             //System.out.println("111111111111111111111111111111");
             return false;
         }
@@ -561,7 +537,7 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public boolean collectVideo(AuthInfo auth, String bv) {
         long auth_mid = Authentication.authentication(auth, dataSource);
-        if (auth_mid == 0){
+        if (auth_mid == 0) {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {

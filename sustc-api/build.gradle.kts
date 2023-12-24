@@ -12,7 +12,6 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
-    compileOnly("com.opencsv:opencsv:5.8")
     implementation("commons-codec:commons-codec:1.15")
     // You may add any utility library you want to use, such as guava.
     // ORM libraries are prohibited in this project.
