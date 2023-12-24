@@ -6,6 +6,13 @@ spring:
 
 ---
 
+logging:
+  level:
+    root: off
+    io.sustc: debug
+
+---
+
 benchmark:
   data-path: data
   student-mode: true
