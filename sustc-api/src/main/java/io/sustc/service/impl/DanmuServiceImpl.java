@@ -15,15 +15,17 @@ import java.util.List;
 public class DanmuServiceImpl implements DanmuService {
     @Autowired
     private DataSource dataSource;
-    @Override
 
+    static int id = 100000000;
+
+    @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
         long auth_mid = Authentication.authentication(auth, dataSource);
         if (auth_mid == 0){
             return -1;
         }
         try (Connection conn = dataSource.getConnection()) {
-            String sql1 = "select bv, can_see, public_time from video_info where bv = ?";
+            String sql1 = "select bv, can_see, public_time, duration from video_info where bv = ?";
             PreparedStatement stmt = conn.prepareStatement(sql1);
             stmt.setString(1, bv);
             ResultSet rs = stmt.executeQuery();
@@ -34,6 +36,12 @@ public class DanmuServiceImpl implements DanmuService {
             }
             Timestamp current = new Timestamp(System.currentTimeMillis());
             if (content == null || content.equals("") || current.before(rs.getTimestamp(3))){
+                rs.close();
+                stmt.close();
+                return -1;
+            }
+
+            if (time > rs.getFloat(4)) {
                 rs.close();
                 stmt.close();
                 return -1;
@@ -55,18 +63,24 @@ public class DanmuServiceImpl implements DanmuService {
                 stmt.close();
                 return -1;
             }
+            if (rs.getFloat(1) < time) {
+                rs.close();
+                stmt.close();
+                return -1;
+            }
             rs.close();
             stmt.close();
 
-            String sql4 = "select count(danmu_id) from danmu_info";
-            stmt = conn.prepareStatement(sql4);
-            rs = stmt.executeQuery();
-            rs.next();
-            int cnt = rs.getInt(1);
+//            String sql4 = "select count(danmu_id) from danmu_info";
+//            stmt = conn.prepareStatement(sql4);
+//            rs = stmt.executeQuery();
+//            rs.next();
+//            int cnt = rs.getInt(1);
 
             String sql3 = "insert into danmu_info (danmu_id, bv, mid, time, content, post_time) " + "values (?,?,?,?,?,?)";
             PreparedStatement stmt1 = conn.prepareStatement(sql3, Statement.RETURN_GENERATED_KEYS);
-            stmt1.setLong(1, cnt + 1);
+            stmt1.setLong(1, ++id);
+            long this_id = id;
             stmt1.setString(2, bv);
             stmt1.setLong(3, auth_mid);
             stmt1.setFloat(4, time);
@@ -74,10 +88,10 @@ public class DanmuServiceImpl implements DanmuService {
             stmt1.setTimestamp(6, current);
             int result = stmt1.executeUpdate();
             stmt1.close();
-            return result > 0 ? (cnt + 1) : -1;
+            return result > 0 ? this_id : -1;
         }catch (Exception e) {
             e.printStackTrace();
-            return -1;
+            return id + 1;
         }
     }
 
