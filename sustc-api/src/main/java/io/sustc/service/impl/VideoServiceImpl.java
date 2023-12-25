@@ -127,7 +127,7 @@ public class VideoServiceImpl implements VideoService {
             return false;
         }
         try (Connection conn = dataSource.getConnection()) {
-            String sql1 = "select owner_mid, title, description, duration, public_time from video_info where bv = ?";
+            String sql1 = "select owner_mid, title, description, duration, public_time, can_see from video_info where bv = ?";
             PreparedStatement stmt = conn.prepareStatement(sql1);
             stmt.setString(1, bv);
             ResultSet rs = stmt.executeQuery();
@@ -141,6 +141,7 @@ public class VideoServiceImpl implements VideoService {
             String description = rs.getString(3);
             double duration = rs.getDouble(4);
             Timestamp publicTime = rs.getTimestamp(5);
+            boolean can_see = rs.getBoolean(6);
             if (ownerMid != auth_mid) {
                 rs.close();
                 stmt.close();
@@ -164,23 +165,23 @@ public class VideoServiceImpl implements VideoService {
             }
 
             String sql2 = "update video_info set title = ?, description = ?, public_time = ?, " +
-                    "can_see = false where bv = ?";
+                    "can_see = false, review_time = null where bv = ?";
             stmt = conn.prepareStatement(sql2);
             stmt.setString(1, req.getTitle());
-            stmt.setString(2, req.getDescription());
+            stmt.setString(2, req.getDescription() == null ? "" : req.getDescription());
             if (!now.after(req.getPublicTime()))
                 stmt.setTimestamp(3, req.getPublicTime());
             stmt.setString(4, bv);
             int x = stmt.executeUpdate();
             stmt.close();
-            return x != 0;
+            return x != 0 && can_see;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
     }
 
-    // toDo: debug
+    // accept
     @Override
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         long auth_mid = Authentication.authentication(auth, dataSource);

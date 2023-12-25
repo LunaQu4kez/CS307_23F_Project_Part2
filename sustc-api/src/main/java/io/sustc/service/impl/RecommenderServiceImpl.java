@@ -31,7 +31,7 @@ public class RecommenderServiceImpl implements RecommenderService {
                 "  AND v2.can_see IS TRUE\n" +
                 "  AND ? >= v2.public_time\n" +
                 "GROUP BY v1.bv\n" +
-                "ORDER BY num_common_viewers DESC\n" +
+                "ORDER BY num_common_viewers DESC, bv ASC\n" +
                 "LIMIT 5";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt1 = conn.prepareStatement(sql1)) {
