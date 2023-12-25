@@ -134,7 +134,7 @@ boolean follow(AuthInfo auth, long followeeMid);
 
 First verify if the `AuthInfo` is valid or not. If not, return false.
 
-Then search if there exists the user relating to the followeeMid. If not, return false.
+Then search if there exists the user relating to the ``followeeMid``. If not, return false.
 
 If the user has followed the followeemid when performing this operation, it will be deleted from `follow`. On the contrary, it will be inserted.
 
@@ -186,6 +186,15 @@ List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageN
 First verify if the `AuthInfo` is valid or not. If not, return null.
 
 Then search if there exists the video relating to bv. If not, return null.
+
+**It is worth noting that ``keywords`` may contain symbols such as ``\``,``%`` which will work in the expression, and we need to replace them with themselves but beginning with``\``.**
+
+```java
+String[] word = (words[i] + "!").split("%");
+words[i] = word[0];
+for (int j = 1; j < word.length; j++) words[i] = words[i] + "\\%" + word[j];
+words[i] = words[i].substring(0, words[i].length() - 1);
+```
 
 Use two `HashMap` to record the count of matched keywords and count of view of each video. Sort them according to the sorting rule and return the list.
 
@@ -280,9 +289,9 @@ This method recommends videos based on video scores.
 
 First, we check if the input is valid. If not, return null.
 
-Then we use SQL to query the scores of each video, specifically querying the ratio of likes, coins, favorites, bullet comments, and completion. Then we add them together. 
+Then we use SQL to query the scores of each video, specifically querying the ratio of likes, coins, favorites, sending danmu, and average completion. Then we add them together. 
 
-It is worth noting that there are many data points where the video has not been watched but has received likes, etc., so we do not consider this part of the data. We only consider the actions performed on videos that have been watched.
+**It is worth noting that there are many data points where the video has not been watched but has received likes, etc.,  we limit it to 1 if so.** 
 
 Last, we  return the required videos' bv as a ``list``.
 
