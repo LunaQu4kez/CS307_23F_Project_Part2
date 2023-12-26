@@ -1,4 +1,8 @@
+
+
 # CS307 Project Part II
+
+
 
 ## Basic Information
 
@@ -374,17 +378,122 @@ We test the time cost of import data before optimize and after optimize **each f
 | before optimize | 14m25s | 12m54s | 13m8s | 13m39s | 14m17s | 13m41s |
 | after optimize  | 7m25s  | 5m18s  | 6m3s  | 5m46s  | 6m15s  | 6m10s  |
 
+(* The data tested is the released large data, not small data)
 
 
-### 2. Password Protection
+
+### 2. Optimization of Query 
+
+After we read the project requirements at the beginning, we realized that we need to query some quantities such as the total number of likes and views. If we can maintain these quantities, then we can do the queries quickly. **So we used a trigger on ``like_video``, ``coin_video``, ``fav_video``, ``view_video``to maintain  ``like_cnt``, ``coin_cnt``, ``fav_cnt``, ``view_cnt``.** In the case of more complex queries, the time used becomes less. Here is an example of our trigger function and trigger of table `like_video`.
+
+```sql
+create or replace function likev_update() returns trigger as $$
+begin
+    if (TG_OP = 'INSERT') then
+        update video_info set like_cnt = like_cnt + 1 where bv = new.bv;
+    elsif (TG_OP = 'DELETE') then
+        update video_info set like_cnt = like_cnt - 1 where bv = new.bv;
+    end if;
+    return null;
+end;
+$$ language plpgsql;
+
+create trigger likev
+after insert or delete on like_video
+for each row
+execute function likev_update();
+```
+
+To investigate whether using triggers is an effective optimization, we conducted tests by inserting data and calling methods in the interface `RecommenderService`. Here is the result:
+
+| Test        | Without Trigger | With Trigger | Result                   |
+| ----------- | --------------- | ------------ | ------------------------ |
+| Query       | 183734 ms       | 313 ms       | Quicker about 587 times  |
+| Import Data | 13 min 41 s     | > 1 h        | Slower more than 5 times |
+
+Although the data shows that the efficiency of query operation has been greatly improved, and the efficiency of import data only slow 5 times. But the time cost of import data is originally very large, a 5 times slower cause a very big effect. Even if we execute 10 queries, the time saved compare to the time spend more in import data is still very less.
+
+This is where we have to rethink the need for triggers.
+
+In real projects, queries and modifications are almost very large, and the number of queries is often larger than the number of modifications, so it is economical to maintain these variables. **But just for this project, the inserts are in the millions, while the test queries are only in 1e3**. The queries are much smaller than the inserts, so maintaining preprocessed variables is very costly and the benefits are small. So we got rid of the trigger, and started to work on optimizing in other ways, that is, optimizing the sql query statement.
+
+The following 2 queries are the DQL of method `recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum)`.
+
+```sql
+-- before optimize --
+select v.bv, count(*) as cnt
+from view_video v
+         join (select up_mid, fans_mid as friends_mid
+               from follow
+               where (fans_mid, up_mid) in (select up_mid, fans_mid from follow) and up_mid = ?) f 
+         on f.friends_mid = v.mid
+         join video_info i on v.bv = i.bv
+         join user_info ui on i.owner_mid = ui.mid
+where (v.bv , f.up_mid) not in (select bv, mid from view_video)
+group by v.bv, ui.level, i.public_time
+order by cnt desc, ui.level, i.public_time;
+
+-- after optimize --
+select v.bv, count(*) as cnt
+from view_video v
+         join (select up_mid, fans_mid as friends_mid
+               from follow
+               where (fans_mid, up_mid) in (select up_mid, fans_mid from follow) and up_mid = ?) f 
+         on f.friends_mid = v.mid
+         join video_info i on v.bv = i.bv
+         join user_info ui on i.owner_mid = ui.mid
+where (v.bv , f.up_mid) not in (select bv, mid from view_video where mid = ?)
+group by v.bv, ui.level, i.public_time
+order by cnt desc, ui.level, i.public_time;
+```
+
+The only changed of this 2 query is the sub-query behind `not in`. We only add `where mid = ?` this limitation, and the speed of this query has significant improvement. But the logic is very obvious, we want to filter out the video this user have watched, we only need to search the videos this user have watched and we do not need to care about other user's view record.
+
+The following 2 queries are the DQL of calculate the like points in method `generalRecommendations(int pageSize, int pageNum)`.
+
+```sql
+-- before optimize --
+select cast(count_like as float) / cast(count_view as float) as cnt
+from (select bv, count(*) as count_like
+      from (select mid, bv
+            from like_video
+            intersect
+            select mid, bv
+            from view_video) like_table
+      group by bv) like_cnt
+         join
+         (select bv, count(*) as count_view from view_video group by bv) view_cnt 
+         on view_cnt.bv = like_cnt.bv
+where count_view <> 0
+order by cnt desc;
+
+-- after optimize --
+select like_cnt.bv, cast(count_like as float) / cast(count_view as float) as cnt
+from (select count(mid) as count_like, bv from like_video
+	where (bv, mid) in (select bv, mid from view_video)
+	group by bv) like_cnt
+    join
+    (select bv, count(*) as count_view from view_video group by bv) view_cnt 
+    on view_cnt.bv = like_cnt.bv
+where count_view <> 0
+order by cnt desc;
+```
+
+We use `from like_video where (bv, mid) in (select bv, mid from view_video)` instead of `from (select mid, bv from like_video intersect select mid, bv from view_video)` and the time cost reduce from about 40 seconds to less than 3 seconds. We should avoid using `intersect` unless we have no other choice because the intersect operation is very complex and with a very high algorithm complexity. Instead, we can use nest query to make it more faster.
+
+
+
+### 3. Password Protection
 
 To enhance out system's security, we encryption the password then insert them into database. **If someone intrusion the database and steal all the records, he can directly know everyone's password, which is very dangerous.** So we should encryption the password then insert them into database. Then comes a problem, how should we encryption the password.
 
 At first, we think we can use a one-to-one function (denote as *f* ), then we insert *f(password)* into database, and when we want to check `AuthInfo`, we calculate *g(password after encryption)* (*g* is the inverse function of *f*). In cryptography, this is called symmetric cryptography, which means the message sender and receiver share the same secret key for both encryption and decryption. **But this is not security enough, because the encryption process can be inverse so if someone know only one side's secret key, the password will be decipher.**
 
+If we consider asymmetric encryption, also called public key encryption, which means the information obtained by encrypting a user's key can only be decrypted using that user's decryption key. **If one is known, the other cannot be calculated. Therefore, if one of a pair of keys is disclosed, it will not compromise the secret properties of the other.** The most widely used asymmetric encryption algorithm is RSA. But there are still some disadvantage of asymmetric encryption
+
 Then, there comes an idea. **We can use irreversible encryption.** We assign a hash function and when the password is inserted into database, we call this hash function and insert the result after encipher. When we want to check whether the `AuthInfo` is valid or not, we call this hash function again and compare the result of the password the user gives after encipher to the account's password after encipher in the database. This is much safer than the first method.
 
-In cryptography, the is a concept called **salt**, which means the process of adding salt by inserting a specific string at any fixed position in the password, so that the hash result does not match the hash result using the original password. Usually, when a field is hashed (such as MD5), a hash value is generated, and the hashed value cannot be obtained by a specific algorithm to obtain the original field. **However, in some cases, such as a large [rainbow table](https://www.zhihu.com/question/19790488), searching for the MD5 value in the table may very quickly find the true field content corresponding to the hash value.** The hashed value after salt addition can greatly reduce the risk of password leakage caused by user data theft. Even if the original content corresponding to the hashed value is found through the rainbow table, the characters inserted after salt addition can interfere with the real password, greatly reducing the probability of obtaining the real password.
+In cryptography, the is a concept called **salt**, which means the process of adding salt by inserting a specific string at any fixed position in the password, so that the hash result does not match the hash result using the original password. Usually, when a field is hashed (such as MD5), a hash value is generated, and the hashed value cannot be obtained by a specific algorithm to obtain the original field. **However, in some cases, such as a large [Rainbow Table](https://www.zhihu.com/question/19790488), searching for the MD5 value in the table may very quickly find the true field content corresponding to the hash value.** Specifically, a rainbow table is a pre-computed table used for encrypting the inverse operation of a hash function, prepared to crack the hash value (or hash value) of a password. Generally, mainstream rainbow watches are above 100G. This type of table is often used to recover fixed length plain text passwords composed of a finite set of characters. This is a typical practice of using space to replace time. This cracking method has less processing time and more storage space than brute force cracking that calculates hashes every time an attempt is made, but it has less storage space and more processing time than a simple cracking method of flipping tables for each input hash. The hashed value after salt addition can greatly reduce the risk of password leakage caused by user data theft. Even if the original content corresponding to the hashed value is found through the rainbow table, the characters inserted after salt addition can interfere with the real password, greatly reducing the probability of obtaining the real password.
 
 ```java
 public static final long[] BASE = {1, 257, 66049, 197425, 406721, 718570, 123642, 318804, 143934, 290983, 333948, 890223, 198397, 656525, 955245, 131883, 339595, 244356, 933685, 882401};
@@ -410,6 +519,68 @@ public static String MD5SaltHash(String str, long mid) {
 ```
 
  The above code encrypts the string using MD5, then concatenates it with a salt value obtained from the ``mid`` parameter, and finally applies the modulo operation with a prime number``MOD_C = 9223372036854775783`` which close to 2^63 to generate a string that is stored in the database. By querying, **it is known that this method does not have any hash function compared to the first encryption method which had two duplicate passwords.** This further reduces the likelihood of collisions and lowers the risk of password leakage.
+
+#### Notice: Modulo Number selection
+
+Maybe there are still some issue about how to choose a better module number. **But remember, the only requirement for selecting a module is to minimize collisions after taking the module as much as possible.** So we consider the following idea:
+
+- **We should choose the modulu number enough big but not too big.** If we choose the module too big, it is very difficult and slow to calculate in hash function. The reason we should not choose the module small is because if the module number *m* is small, the modulo set of *m* is small then hash collision may happened more frequent.
+
+- **The module number we chose should be a prime number.** (This idea is inspired by [link](https://blog.csdn.net/rubic_z/article/details/94735106)). The ability of prime numbers to avoid conflicts in modular operations is not a mathematical law, and avoiding conflicts is not absolute. From a regular perspective, if the interval between the sequences to be stored happens to be the factor size of the modulus to be taken, then composite numbers are more likely to exhibit periodic modulus repetition than prime numbers.
+
+  Here is an example about prime numbers do better in avoiding collision:
+
+  This is a sequence with an interval of 3. We calculate the result of modulo 11 to 14 and summarize the pattern. The bold characters in the results represent hash collisions.
+
+  | Array  | 34   | 37   | 40   | 43   | 46     | 49    | 52    | 55     | 58     |
+  | ------ | ---- | ---- | ---- | ---- | ------ | ----- | ----- | ------ | ------ |
+  | mod 11 | 1    | 4    | 7    | 10   | 2      | 5     | 8     | 0      | 3      |
+  | mod 12 | 10   | 1    | 4    | 7    | **10** | **1** | **4** | **7**  | **10** |
+  | mod 13 | 8    | 11   | 1    | 4    | 7      | 10    | 0     | 3      | 6      |
+  | mod 14 | 6    | 9    | 12   | 1    | 4      | 7     | 10    | 13     | 2      |
+  | mod 15 | 4    | 7    | 10   | 13   | 1      | **4** | **7** | **10** | **13** |
+
+  The following is a sequence with an interval of 2. We also calculate the result of modulo 11 to 14.
+
+  | Array  | 47   | 49   | 51   | 53   | 55   | 57   | 59     | 61    | 63    |
+  | ------ | ---- | ---- | ---- | ---- | ---- | ---- | ------ | ----- | ----- |
+  | mod 11 | 3    | 5    | 7    | 9    | 0    | 2    | 4      | 6     | 8     |
+  | mod 12 | 11   | 1    | 3    | 5    | 7    | 9    | **11** | **1** | **3** |
+  | mod 13 | 8    | 10   | 12   | 1    | 3    | 5    | 7      | 9     | 11    |
+  | mod 14 | 5    | 7    | 9    | 11   | 13   | 1    | 3      | **5** | **7** |
+  | mod 15 | 2    | 4    | 6    | 8    | 10   | 12   | 14     | 1     | 3     |
+
+  From the two tables, we may find that the prime module 11 and 13 behaved well with no collision, but 12, 14 and 15 these non-prime module all occurs collision. Although the test data there is very small, this pattern is actually very universal.
+
+**Through the discussion above, we can conclude that we would better choose a big prime number to be the module.**
+
+BUT, can there be a stronger conclusion about choosing modulus ? YES ! From the two tables, we find if the result of mod retrieve all numbers in modulo set, then this is the best situation. 
+
+Fortunately, we find some theorem about this. A concept called **primitive root** is below.
+$$
+\begin{flalign}
+\bold{Definition}\;\;
+& A\;primitive\;root\;modulo\;a\;prime\;p\;is\;an\;integer\;r\;∈\;\bold{Z_p}\;such\;that\;\\
+& every\;nonzero\;element\;of\; \bold{Z_p}\; is\; a\; power\; of\; r\; mod\; p.
+\end{flalign}
+$$
+
+We want to choose the module number which has primitive root. This will cause less collision because the modulo set is larger. Then we have a theorem about what kind of number can have primitive root.
+$$
+\begin{flalign}
+\bold{Theorem}\;\;
+& There\;exists\;a\;primitive\;root\;modulo\;n\;(n ≥ 2)\;if\;and\;only\;if \\
+& \;n = 2, 4, p^k\;or\;2p^k, where\;p\;is\;an\;odd\;prime\;number.
+\end{flalign}
+$$
+When n is large, there is a pattern in the distribution of numbers with primitive roots. These numbers with primitive roots distributed densely around 2^k. Hence, we are more likely to choose our module number a prime number around 2^k. And then we choose `MOD_A = 1048573`, `MOD_B = 2147483647`, `MOD_C = 9223372036854775783`.
+
+| Modulo | Modulo Number       | k    | 2^k                 |
+| ------ | ------------------- | ---- | ------------------- |
+| MOD_A  | 1048573             | 20   | 1048576             |
+| MOD_B  | 2147483647          | 31   | 2147483648          |
+| MOD_C  | 9223372036854775783 | 63   | 9223372036854775808 |
+
 
 
 
@@ -443,26 +614,58 @@ private static String av2bv(long av) {
 
 When we want to create a new bv, we get all the exist videos' bv and trasform them into av. Then find the maximum of existed av, the new video's av would be max_av + 1, **this promise the uniqueness of av**. Next convert the new video's av to bv and the new video's bv has been generated.
 
-Then we explain our transformation algorithm. Choose transform bv to av as an example (the transformation of av to bv is just a reverse process). The bv of a video must be "BV" at beginning and another 10 digits after. Assuming the highest bit is the 0th bit and the lowest bit is the 9th bit, then the 0th bit must be 1, the 3rd bit must be 4, the 5th bit must be 1, and the 7th bit must be 7. Namely, **bv's last 10 digits must be "1xx4x1x7xx"**, these known digits did not participate in the calculation of av number. **f, Z, o, d, R, 9, X, Q, D, S, U, m, 2,1, y, C, k, r, 6, z, B, q, i, v, e, Y, a, h, 8, b, t, 4, x, s, W, p, H, n, J, E, 7, j, L, 5, V, G, 3, g, u, M, T, K, N, P, A, w, c, F represent the 58 base expressed in the range of 0 to 57, respectively.** This is called a confusion table, the table is as follow.
+Then we explain our transformation algorithm. Choose transform bv to av as an example (the transformation of av to bv is just a reverse process). The bv of a video must be "BV" at beginning and another 10 digits after. Assuming the highest bit is the 0th bit and the lowest bit is the 9th bit, then the 0th bit must be 1, the 3rd bit must be 4, the 5th bit must be 1, and the 7th bit must be 7. Namely, **bv's last 10 digits must be "1xx4x1x7xx"**, these known digits did not participate in the calculation of av number. **f, Z, o, d, R, 9, X, Q, D, S, U, m, 2,1, y, C, k, r, 6, z, B, q, i, v, e, Y, a, h, 8, b, t, 4, x, s, W, p, H, n, J, E, 7, j, L, 5, V, G, 3, g, u, M, T, K, N, P, A, w, c, F represent the 58 base expressed in the range of 0 to 57, respectively.** This is called a **confusion table**, the table is as follow.
 
-| 1    | 2    | 3    | 4    | 5    | 6    | 7    | 8    | 9    |
-| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| 13   | 12   | 46   | 31   | 43   | 18   | 40   | 28   | 5    |
-| A    | B    | C    | D    | E    | F    | G    | H    | I    |
-| 54   | 20   | 15   | 8    | 39   | 57   | 45   | 36   | /    |
-| J    | K    | L    | M    | N    | O    | P    | Q    | R    |
-| 38   | 51   | 42   | 49   | 52   | /    | 53   | 7    | 4    |
-| S    | T    | U    | V    | W    | X    | Y    | Z    |      |
-| 9    | 50   | 10   | 44   | 34   | 6    | 25   | 1    |      |
-| a    | b    | c    | d    | e    | f    | g    | h    | i    |
-| 26   | 29   | 56   | 3    | 24   | 0    | 47   | 27   | 22   |
-| j    | k    | l    | m    | n    | o    | p    | q    | r    |
-| 41   | 16   | /    | 11   | 37   | 2    | 35   | 21   | 17   |
-| s    | t    | u    | v    | w    | x    | y    | z    |      |
-| 33   | 30   | 48   | 23   | 55   | 32   | 14   | 19   |      |
+|      | Col 1 | Col 2 | Col 3 | Col 4 | Col 5 | Col 6 | Col 7 | Col 8 | Col 9 |
+| ---- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+| char | 1     | 2     | 3     | 4     | 5     | 6     | 7     | 8     | 9     |
+| num  | 13    | 12    | 46    | 31    | 43    | 18    | 40    | 28    | 5     |
+| char | A     | B     | C     | D     | E     | F     | G     | H     | I     |
+| num  | 54    | 20    | 15    | 8     | 39    | 57    | 45    | 36    | /     |
+| char | J     | K     | L     | M     | N     | O     | P     | Q     | R     |
+| num  | 38    | 51    | 42    | 49    | 52    | /     | 53    | 7     | 4     |
+| char | S     | T     | U     | V     | W     | X     | Y     | Z     |       |
+| num  | 9     | 50    | 10    | 44    | 34    | 6     | 25    | 1     |       |
+| char | a     | b     | c     | d     | e     | f     | g     | h     | i     |
+| num  | 26    | 29    | 56    | 3     | 24    | 0     | 47    | 27    | 22    |
+| char | j     | k     | l     | m     | n     | o     | p     | q     | r     |
+| num  | 41    | 16    | /     | 11    | 37    | 2     | 35    | 21    | 17    |
+| char | s     | t     | u     | v     | w     | x     | y     | z     |       |
+| num  | 33    | 30    | 48    | 23    | 55    | 32    | 14    | 19    |       |
 
  Then replace each number in the bv number with a decimal representation of the number. The only truly useful ones are positions 1, 2, 4, 6, 8, and 9. Then calculate a 10 base number s use the following formula.
 $$
 (s)_{10} = (\overline{bv[4],bv[2],bv[6],bv[1],bv[8],bv[9]})_{58}
 $$
 Finally, subtract the constant 8728348608 from s, and the result obtained is XOR with 77451812. The result is represented as a decimal number, which is the av.
+
+#### Notice: About the uniqueness of bv
+
+- Firstly we know, for every video, it has a unique long number id called av. This uniqueness is reflected in self increasing property of av.
+
+- Each av can transform to only one bv since the method `private static String av2bv(long av)` returns only one String represented the bv.
+
+- But may 2 different av will transform to the same bv ? If the answer is yes, we must have, 
+  $$
+  (av1 \oplus xorNum) + minusNum = (av2 \oplus xorNum) + minusNum
+  $$
+  Which means,
+  $$
+  av1 \oplus xorNum = av2 \oplus xorNum
+  $$
+  Since the XOR operation means bitwise exclusive or, we may analysis this bitwise.
+
+  Here is the XOR operation truth table. We may find that, **if two bit x and y are different, the result of x XOR z and y XOR z must be different.** So if av1 XOR xorNum equals to av2 XOR xorNum, the two are equal bitwise, then av1 and av2 are equal bitwise, which means av1 equals to av2. We can conclude that no 2 different av will transform to the same bv.
+
+  | x    | y    | x XOR y |
+  | ---- | ---- | ------- |
+  | 0    | 0    | 0       |
+  | 0    | 1    | 1       |
+  | 1    | 0    | 1       |
+  | 1    | 1    | 0       |
+
+Above the 3 issue about the uniqueness of bv, we know that our algorithm to generate unique bv is efficient and correct.
+
+
+
+## 4. Provide Great Help for the Nominal and Data of the Project
