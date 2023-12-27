@@ -380,6 +380,8 @@ We test the time cost of import data before optimize and after optimize **each f
 
 (* The data tested is the released large data, not small data)
 
+We have also tried another way to improve the speed of import data, but it was not chosen by us finally. 
+
 
 
 ### 2. Optimization of Query 
@@ -668,4 +670,26 @@ Above the 3 issue about the uniqueness of bv, we know that our algorithm to gene
 
 
 
-## 4. Provide Great Help for the Nominal and Data of the Project
+## 4. Provide Great Help for the Standard and Data of the Project
+
+On the first day of the release of the benchmark, there were many issues with the benchmark, mainly manifested as incorrect standard answers, which prevented the correct code from passing the benchmark's testing. We confirm the requirements of the methods in the interface through high-frequency communication with SA, and report to SA any possible errors in the standard answers. These exchanges with SA have greatly facilitated the release speed of the final correct benchmark. Here are some examples of ambiguous and problematic testing.
+
+### `String postVideo(AuthInfo auth, PostVideoReq req)`
+
+We have got a wrong answer of this case `[AuthInfo(mid=85823831, password=p!YQ(baYtmKvb95, qq=null, wechat=null), PostVideoReq(title=《 奇 怪 的 小 兔 叽 增 加 了 》7, description= asa32329 asqwee32 1212wq dcswfaew34s3grergdxfczxrcfxcgv, duration=15.881694, publicTime=2025-12-01 12:00:00.0)]`. Then we communicate about it with SA. The fact is, SA found out that their nominal name was written incorrectly and correct the answer.
+
+### `long register(RegisterUserReq req)`
+
+This case is wrong answer `[RegisterUserReq(password=8db5e609749c4957, qq=998970494167868265018424, wechat=null, name=aaaafde0c, sex=FEMALE, birthday=7月30日, sign=7ccf8514-a89a-45)]`. And this is because SA made a small mistake. The standard answer is corrected after a few minutes.
+
+### `boolean reviewVideo(AuthInfo auth, String bv)`
+
+In this method, we find one wrong answer case which is `Wrong answer for BV19t4y1E7hd: expected true, got false`. This is a case of the superuser review his own video. The description of this method in interface `VideoService` said everyone can not review his own video, which is contradict to the expected answer. After communicate to SA, the standard answers have been corrected.
+
+### `boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req)`
+
+We have got an wrong answer of this test case `[AuthInfo(mid=0, password=null, qq=4977628, wechat=null), BV1bt4y1x7Wk, PostVideoReq(title=《 奇 怪 的 小 兔 叽 增 加 了 》488, description=null, duration=397.0, publicTime=2025-12-01 12:00:00.0)]`. The expected return value is false but we return true. After seek advice from SA, we know that the description of method in interface is controversial. This case is the owner of the video update video information before the video is reviewed, in this case we should return false and update the record in database.
+
+
+
+Our group has played a significant role in assisting the course team in releasing correct and usable benchmarks, ~~which may beg for some bonus points~~. **Overall, we are very grateful for the work of CS307 teaching group for one semester which bring us not only brings us a lot of knowledge, but also exercises our all-round abilities.**
