@@ -329,6 +329,8 @@ Then, we use SQL to find the users who followed same users with this user, but a
 
 ### 1. Optimization of Import Data
 
+#### (a) Multi-thread Optimization
+
 We use multi-thread to improve the efficiency of import data. **Found that the number of follow, like a video, coin a video, collect a video, view a video, like a danmu is very large**, so in the tables related to these, we use multi-thread improve.
 
 Take insert into table `follow` as an example. The method `insertInFollow(List<UserRecord> userRecords)` below is the method deal with it.
@@ -379,6 +381,8 @@ We test the time cost of import data before optimize and after optimize **each f
 | after optimize  | 7m25s  | 5m18s  | 6m3s  | 5m46s  | 6m15s  | 6m10s  |
 
 (* The data tested is the released large data, not small data)
+
+#### (b) Foreign Key Banned Import
 
 We have also tried another way to improve the speed of import data, but it was not chosen by us finally. 
 
@@ -502,11 +506,15 @@ We use `from like_video where (bv, mid) in (select bv, mid from view_video)` ins
 
 ### 3. Password Protection
 
+#### (a) Some Idea about Encryption
+
 To enhance out system's security, we encryption the password then insert them into database. **If someone intrusion the database and steal all the records, he can directly know everyone's password, which is very dangerous.** So we should encryption the password then insert them into database. Then comes a problem, how should we encryption the password.
 
 At first, we think we can use a one-to-one function (denote as *f* ), then we insert *f(password)* into database, and when we want to check `AuthInfo`, we calculate *g(password after encryption)* (*g* is the inverse function of *f*). In cryptography, this is called symmetric cryptography, which means the message sender and receiver share the same secret key for both encryption and decryption. **But this is not security enough, because the encryption process can be inverse so if someone know only one side's secret key, the password will be decipher.**
 
 If we consider asymmetric encryption, also called public key encryption, which means the information obtained by encrypting a user's key can only be decrypted using that user's decryption key. **If one is known, the other cannot be calculated. Therefore, if one of a pair of keys is disclosed, it will not compromise the secret properties of the other.** The most widely used asymmetric encryption algorithm is RSA. But there are still some disadvantage of asymmetric encryption
+
+#### (b) Our Encryption
 
 Then, there comes an idea. **We can use irreversible encryption.** We assign a hash function and when the password is inserted into database, we call this hash function and insert the result after encipher. When we want to check whether the `AuthInfo` is valid or not, we call this hash function again and compare the result of the password the user gives after encipher to the account's password after encipher in the database. This is much safer than the first method.
 
@@ -537,13 +545,13 @@ public static String MD5SaltHash(String str, long mid) {
 
  The above code encrypts the string using MD5, then concatenates it with a salt value obtained from the ``mid`` parameter, and finally applies the modulo operation with a prime number``MOD_C = 9223372036854775783`` which close to 2^63 to generate a string that is stored in the database. By querying, **it is known that this method does not have any hash function compared to the first encryption method which had two duplicate passwords.** This further reduces the likelihood of collisions and lowers the risk of password leakage.
 
-#### Notice: Modulo Number selection
+#### (c) Some Theorem about Modulo Number Selection
 
-Maybe there are still some issue about how to choose a better module number. **But remember, the only requirement for selecting a module is to minimize collisions after taking the module as much as possible.** So we consider the following idea:
+Maybe there are still some issue about how to choose a better modulo number. **But remember, the only requirement for selecting a modulo is to minimize collisions after taking the module as much as possible.** So we consider the following idea:
 
-- **We should choose the modulu number enough big but not too big.** If we choose the module too big, it is very difficult and slow to calculate in hash function. The reason we should not choose the module small is because if the module number *m* is small, the modulo set of *m* is small then hash collision may happened more frequent.
+- **We should choose the modulo number enough big but not too big.** If we choose the modulo too big, it is very difficult and slow to calculate in hash function. The reason we should not choose the modulo small is because if the modulo number *m* is small, the modulo set of *m* is small then hash collision may happened more frequent.
 
-- **The module number we chose should be a prime number.** (This idea is inspired by [link](https://blog.csdn.net/rubic_z/article/details/94735106)). The ability of prime numbers to avoid conflicts in modular operations is not a mathematical law, and avoiding conflicts is not absolute. From a regular perspective, if the interval between the sequences to be stored happens to be the factor size of the modulus to be taken, then composite numbers are more likely to exhibit periodic modulus repetition than prime numbers.
+- **The modulo number we chose should be a prime number.** (This idea is inspired by [link](https://blog.csdn.net/rubic_z/article/details/94735106)). The ability of prime numbers to avoid conflicts in modular operations is not a mathematical law, and avoiding conflicts is not absolute. From a regular perspective, if the interval between the sequences to be stored happens to be the factor size of the modulos to be taken, then composite numbers are more likely to exhibit periodic modulus repetition than prime numbers.
 
   Here is an example about prime numbers do better in avoiding collision:
 
@@ -567,11 +575,11 @@ Maybe there are still some issue about how to choose a better module number. **B
   | mod 14 | 5    | 7    | 9    | 11   | 13   | 1    | 3      | **5** | **7** |
   | mod 15 | 2    | 4    | 6    | 8    | 10   | 12   | 14     | 1     | 3     |
 
-  From the two tables, we may find that the prime module 11 and 13 behaved well with no collision, but 12, 14 and 15 these non-prime module all occurs collision. Although the test data there is very small, this pattern is actually very universal.
+  From the two tables, we may find that the prime modulo 11 and 13 behaved well with no collision, but 12, 14 and 15 these non-prime module all occurs collision. Although the test data there is very small, this pattern is actually very universal.
 
 **Through the discussion above, we can conclude that we would better choose a big prime number to be the module.**
 
-BUT, can there be a stronger conclusion about choosing modulus ? YES ! From the two tables, we find if the result of mod retrieve all numbers in modulo set, then this is the best situation. 
+BUT, can there be a stronger conclusion about choosing modulos ? YES ! From the two tables, we find if the result of mod retrieve all numbers in modulo set, then this is the best situation. 
 
 Fortunately, we find some theorem about this. A concept called **primitive root** is below.
 $$
@@ -582,7 +590,7 @@ $$
 \end{flalign}
 $$
 
-We want to choose the module number which has primitive root. This will cause less collision because the modulo set is larger. Then we have a theorem about what kind of number can have primitive root.
+We want to choose the modulo number which has primitive root. This will cause less collision because the modulo set is larger. Then we have a theorem about what kind of number can have primitive root.
 $$
 \begin{flalign}
 \bold{Theorem}\;\;
@@ -718,8 +726,6 @@ public List<String> generalRecommendations(int pageSize, int pageNum)
 ```
 
 In the previous annotation, the scoring criteria was described as "who watched the video and also liked it" which means that both seen and liked are required. But in our multiple tests we found that in the answer, the ratio of the total number of likes (excluding seen) to the total number of viewers was used, and if this value was greater than one then it was limited to one. Here the test data did not match the description of the annotation, we communicated with SA to make changes to the annotation.
-
-
 
 
 
