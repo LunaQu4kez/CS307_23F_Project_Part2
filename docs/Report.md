@@ -386,6 +386,8 @@ We have also tried another way to improve the speed of import data, but it was n
 
 ### 2. Optimization of Query 
 
+#### (a) Try Optimization Using Trigger ####
+
 After we read the project requirements at the beginning, we realized that we need to query some quantities such as the total number of likes and views. If we can maintain these quantities, then we can do the queries quickly. **So we used a trigger on ``like_video``, ``coin_video``, ``fav_video``, ``view_video``to maintain  ``like_cnt``, ``coin_cnt``, ``fav_cnt``, ``view_cnt``.** In the case of more complex queries, the time used becomes less. Here is an example of our trigger function and trigger of table `like_video`.
 
 ```sql
@@ -418,6 +420,19 @@ Although the data shows that the efficiency of query operation has been greatly 
 This is where we have to rethink the need for triggers.
 
 In real projects, queries and modifications are almost very large, and the number of queries is often larger than the number of modifications, so it is economical to maintain these variables. **But just for this project, the inserts are in the millions, while the test queries are only in 1e3**. The queries are much smaller than the inserts, so maintaining preprocessed variables is very costly and the benefits are small. So we got rid of the trigger, and started to work on optimizing in other ways, that is, optimizing the sql query statement.
+
+#### (b) Another Try of Using Trigger ####
+
+Maybe we have another method. We could insert without trigger, and use ```like.length``` to get the ```like_cnt```. Then add it before modifying. This method significantly improves the efficiency in large data.
+
+| Test        | Optimize    |
+| ----------- | ----------- |
+| Query       | 313ms       |
+| Import Data | 13 min 41 s |
+
+However, it is not used in our last submission. There are two reasons for this. **First, in real projects, inserts and modifications are mixed and are not optimized using this method.** Secondly, if there is some problem with the insert that causes the data to be inserted incorrectly and the trigger does not work properly on the table, then this can have very serious consequences, resulting in subsequent queries not being able to be performed.
+
+#### (c) Optimization in SQL
 
 The following 2 queries are the DQL of method `recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum)`.
 
@@ -674,21 +689,37 @@ Above the 3 issue about the uniqueness of bv, we know that our algorithm to gene
 
 On the first day of the release of the benchmark, there were many issues with the benchmark, mainly manifested as incorrect standard answers, which prevented the correct code from passing the benchmark's testing. We confirm the requirements of the methods in the interface through high-frequency communication with SA, and report to SA any possible errors in the standard answers. These exchanges with SA have greatly facilitated the release speed of the final correct benchmark. Here are some examples of ambiguous and problematic testing.
 
-### `String postVideo(AuthInfo auth, PostVideoReq req)`
+``` java
+String postVideo(AuthInfo auth, PostVideoReq req)
+```
 
 We have got a wrong answer of this case `[AuthInfo(mid=85823831, password=p!YQ(baYtmKvb95, qq=null, wechat=null), PostVideoReq(title=《 奇 怪 的 小 兔 叽 增 加 了 》7, description= asa32329 asqwee32 1212wq dcswfaew34s3grergdxfczxrcfxcgv, duration=15.881694, publicTime=2025-12-01 12:00:00.0)]`. Then we communicate about it with SA. The fact is, SA found out that their nominal name was written incorrectly and correct the answer.
 
-### `long register(RegisterUserReq req)`
+```java
+long register(RegisterUserReq req)
+```
 
 This case is wrong answer `[RegisterUserReq(password=8db5e609749c4957, qq=998970494167868265018424, wechat=null, name=aaaafde0c, sex=FEMALE, birthday=7月30日, sign=7ccf8514-a89a-45)]`. And this is because SA made a small mistake. The standard answer is corrected after a few minutes.
 
-### `boolean reviewVideo(AuthInfo auth, String bv)`
+```java
+boolean reviewVideo(AuthInfo auth, String bv)
+```
 
 In this method, we find one wrong answer case which is `Wrong answer for BV19t4y1E7hd: expected true, got false`. This is a case of the superuser review his own video. The description of this method in interface `VideoService` said everyone can not review his own video, which is contradict to the expected answer. After communicate to SA, the standard answers have been corrected.
 
-### `boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req)`
+``` java 
+boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req)  
+```
 
 We have got an wrong answer of this test case `[AuthInfo(mid=0, password=null, qq=4977628, wechat=null), BV1bt4y1x7Wk, PostVideoReq(title=《 奇 怪 的 小 兔 叽 增 加 了 》488, description=null, duration=397.0, publicTime=2025-12-01 12:00:00.0)]`. The expected return value is false but we return true. After seek advice from SA, we know that the description of method in interface is controversial. This case is the owner of the video update video information before the video is reviewed, in this case we should return false and update the record in database.
+
+```java
+public List<String> generalRecommendations(int pageSize, int pageNum)
+```
+
+In the previous annotation, the scoring criteria was described as "who watched the video and also liked it" which means that both seen and liked are required. But in our multiple tests we found that in the answer, the ratio of the total number of likes (excluding seen) to the total number of viewers was used, and if this value was greater than one then it was limited to one. Here the test data did not match the description of the annotation, we communicated with SA to make changes to the annotation.
+
+
 
 
 
