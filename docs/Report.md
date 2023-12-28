@@ -390,6 +390,8 @@ If we use a thread pool to insert tables, then these threads will run into the p
 
 But designing the database this way violates the third normal form of databases. **And if any data is not inserted successfully, adding foreign key constraints later may fail, which can lead to a complete failure later on.** The strong of this database designed this way is very low. And for real engineering projects, using this method is not possible.
 
+
+
 ### 2. Optimization of Query 
 
 #### (a) Try Optimization Using Trigger ####
