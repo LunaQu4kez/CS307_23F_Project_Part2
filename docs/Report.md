@@ -386,7 +386,9 @@ We test the time cost of import data before optimize and after optimize **each f
 
 We have also tried another way to improve the speed of import data, but it was not chosen by us finally. 
 
+If we use a thread pool to insert tables, then these threads will run into the problem of foreign key constraints if they are inserting a table and the table it's foreign key points to at the same time. This problem can be solved by removing the foreign key constraints from all tables and adding the foreign key constraints again.
 
+But designing the database this way violates the third normal form of databases. **And if any data is not inserted successfully, adding foreign key constraints later may fail, which can lead to a complete failure later on.** The strong of this database designed this way is very low. And for real engineering projects, using this method is not possible.
 
 ### 2. Optimization of Query 
 
