@@ -2,6 +2,8 @@
 
 CS307 数据库原理2023秋季 Project Part 2
 
+得分 98/100
+
 Project 说明及要求：https://github.com/hezean/sustc
 
 
